@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Container from '@/Components/Container.vue';
+import UploadAmazonFiles from '@/Pages/Imports/Partials/UploadAmazonFiles.vue';
 import ResponsiveCard from '@/Components/ResponsiveCard.vue';
 </script>
 
@@ -13,7 +14,7 @@ import ResponsiveCard from '@/Components/ResponsiveCard.vue';
         <Container :spaced-mobile="false">
             <div class="py-12">
                 <ResponsiveCard>
-                    <p class="m-0">You are logged in!</p>
+                    <UploadAmazonFiles/>
                 </ResponsiveCard>
             </div>
         </Container>
