@@ -92,6 +92,7 @@ class ReadCategoryFileJob implements ShouldQueue
                         'sku' => $seller_sku,
                         'brand' => $brand,
                         'image_path' => $image_url,
+                        'catalog_id' => $this->catalog->id,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
@@ -110,6 +111,8 @@ class ReadCategoryFileJob implements ShouldQueue
 
             if (!empty($batch)) {
                 $this->insertBatch($batch);
+                $fnskuPath = str_replace('xlsm', 'txt', $this->categoryFilePath);
+                dispatch(new ReadFulfillmentInventoryJob($fnskuPath, $this->catalog));
             }
 
             Log::info('Processing complete', $this->stats);

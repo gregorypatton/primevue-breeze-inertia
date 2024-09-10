@@ -32,8 +32,14 @@ class CatalogController extends Controller
         try {
             if ($request->hasFile('categoryFile')) {
                 $categoryFile = $request->file('categoryFile');
-                $categoryFileName = $catalog->id . '_category.xlsm';
+                $categoryFileName = $catalog->id . '.xlsm';
+                if ($request->hasFile('fnskuFile')) {
+                    $fnskuFile = $request->file('fnskuFile');
+                    $fnskuFileName = $catalog->id . '.txt';
 
+                    $fnskuPath = $fnskuFile->storeAs('uploads/imports', $fnskuFileName); // Store in default disk
+                    $fileUrls['fnskuFile'] = Storage::url($fnskuPath);
+                }
                 // Store the file in the local storage (storage/app/uploads)
                 $categoryPath = $categoryFile->storeAs('uploads/imports', $categoryFileName); // Don't use "public" disk here
                 $fileUrls['categoryFile'] = Storage::url($categoryPath);
@@ -43,13 +49,7 @@ class CatalogController extends Controller
                 Log::info('Job dispatched with file path: ' . $categoryPath);
             }
 
-            if ($request->hasFile('fnskuFile')) {
-                $fnskuFile = $request->file('fnskuFile');
-                $fnskuFileName = $catalog->id . '_fulfillment.txt';
 
-                $fnskuPath = $fnskuFile->storeAs('uploads/imports', $fnskuFileName); // Store in default disk
-                $fileUrls['fnskuFile'] = Storage::url($fnskuPath);
-            }
 
             return response()->json([
                 'message' => 'Files uploaded and catalog created successfully!',

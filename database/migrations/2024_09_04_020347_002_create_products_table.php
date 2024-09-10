@@ -18,6 +18,7 @@ return new class extends Migration {
             $table->text('title');
             $table->text('brand')->nullable();
             $table->char('sellable_id', 20)->nullable();
+            $table->foreignUuid('catalog_id')->nullable()->index();
             $table->string('image_path')->nullable();
             $table->timestamp('created_at')->nullable();
             $table->timestamp('updated_at')->nullable();

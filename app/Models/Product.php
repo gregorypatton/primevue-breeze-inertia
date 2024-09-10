@@ -8,11 +8,12 @@ use App\Models\Catalog;
 use App\Enums\BarcodeIDTypeEnum;
 use Milon\Barcode\Facades\DNS1DFacade;
 use App\Helpers\BarcodeValidator;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Product extends Model
 {
     use HasFactory;
-    protected $fillable = ['sku', 'title', 'prep_detail_id', 'special_instructions', 'supplier', 'image_path'];
+    protected $fillable = ['sku', 'title', 'prep_detail_id', 'special_instructions', 'supplier', 'image_path', 'catalog_id'];
 
 
     protected $guarded = [];
@@ -64,5 +65,10 @@ class Product extends Model
     {
         if ($this->id_type)
             return DNS1DFacade::getBarcodeHTML($this->sellableId, $this->id_type);
+    }
+
+    public function catalog(): BelongsTo
+    {
+        return $this->belongsTo(Catalog::class);
     }
 }
