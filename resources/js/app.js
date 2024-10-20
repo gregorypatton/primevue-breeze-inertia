@@ -11,11 +11,18 @@ import PrimeVue from 'primevue/config';
 import ToastService from 'primevue/toastservice';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
+import Core from 'primevue/config'
 
-import { useTheme } from '@/Composables/useTheme.js';
-import customThemePreset from '@/theme-preset.js';
+import { useTheme } from './Composables/useTheme.js';
+import customThemePreset from './theme-preset.js';
+
+// Import Orion SDK
+import { Orion } from "@tailflow/laravel-orion/lib/orion";
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+// Initialize Orion SDK
+Orion.init(window.location.origin);
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

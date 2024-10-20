@@ -20,5 +20,9 @@
         "tailwindcss-primeui": "^0.3.2",
         "vite": "^5.0",
         "vue": "^3.5.0"
+    },
+    "dependencies": {
+        "@tailflow/laravel-orion": "^4.1.0",
+        "vue-loader": "^17.4.2"
     }
 }
