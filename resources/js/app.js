@@ -7,6 +7,8 @@ import { createInertiaApp, Head, Link } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
+import { createPinia } from 'pinia';
+
 import PrimeVue from 'primevue/config';
 import ToastService from 'primevue/toastservice';
 import InputText from 'primevue/inputtext';
@@ -24,6 +26,8 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 // Initialize Orion SDK
 Orion.init(window.location.origin);
 
+const pinia = createPinia();
+
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
     resolve: (name) =>
@@ -39,6 +43,7 @@ createInertiaApp({
         // start the app
         return createApp({ render: () => h(App, props) })
             .use(plugin)
+            .use(pinia) // Add Pinia to the app
             .use(ZiggyVue, Ziggy)
             .use(PrimeVue, {
                 theme: customThemePreset,

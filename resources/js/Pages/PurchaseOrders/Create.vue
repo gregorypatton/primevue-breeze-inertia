@@ -2,7 +2,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Container from '@/Components/Container.vue';
 import ResponsiveCard from '@/Components/ResponsiveCard.vue';
-import CreatePurchaseOrder from '@/Components/CreatePurchaseOrder/CreatePurchaseOrder.vue';
+import CreatePurchaseOrder from './CreatePurchaseOrder.vue';
+import { Head } from '@inertiajs/vue3';
 </script>
 
 <template>

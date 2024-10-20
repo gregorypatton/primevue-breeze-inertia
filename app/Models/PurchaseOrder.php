@@ -38,6 +38,8 @@ class PurchaseOrder extends Model
         'ship_to_address_index' => 'integer',
     ];
 
+    protected $appends = ['bill_to_address', 'ship_from_address', 'ship_to_address'];
+
     protected static function booted()
     {
         static::creating(function ($purchaseOrder) {
@@ -71,19 +73,19 @@ class PurchaseOrder extends Model
         return $this->hasMany(PurchaseOrderPart::class);
     }
 
-    public function getBillToAddress(): ?AddressDTO
+    public function getBillToAddressAttribute(): ?AddressDTO
     {
-        return $this->supplier->getBillToAddress($this->bill_to_address_index);
+        return $this->supplier->addresses->billTo[$this->bill_to_address_index] ?? null;
     }
 
-    public function getShipFromAddress(): ?AddressDTO
+    public function getShipFromAddressAttribute(): ?AddressDTO
     {
-        return $this->supplier->getShipFromAddress($this->ship_from_address_index);
+        return $this->supplier->addresses->shipFrom[$this->ship_from_address_index] ?? null;
     }
 
-    public function getShipToAddress(): ?AddressDTO
+    public function getShipToAddressAttribute(): ?AddressDTO
     {
-        return $this->supplier->getShipToAddress($this->ship_to_address_index);
+        return $this->location->addresses->shipTo[$this->ship_to_address_index] ?? null;
     }
 
     public function setStatus(PurchaseOrderStatus $status): self

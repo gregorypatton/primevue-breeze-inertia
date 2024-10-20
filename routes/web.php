@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\SuppliersController;
+use App\Http\Controllers\WorkOrderController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -26,8 +27,14 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Purchase Order routes
+    Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
     Route::get('/purchase-orders/create', [PurchaseOrderController::class, 'create'])->name('purchase-orders.create');
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->name('purchase-orders.store');
+    Route::get('/purchase-orders/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
+
+    // Work Order routes
+    Route::get('/work-orders/create', [WorkOrderController::class, 'create'])->name('work-orders.create');
+    Route::get('/work-orders/modify', [WorkOrderController::class, 'modify'])->name('work-orders.modify');
 
     // Suppliers route
     Route::get('/suppliers', [SuppliersController::class, 'index'])->name('suppliers.index');

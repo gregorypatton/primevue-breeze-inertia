@@ -1,0 +1,2588 @@
+
+
+==== resources\js\Pages\PurchaseOrders\Create.vue ====
+
+<script setup>
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Container from '@/Components/Container.vue';
+import ResponsiveCard from '@/Components/ResponsiveCard.vue';
+import CreatePurchaseOrder from './CreatePurchaseOrder.vue';
+import { Head } from '@inertiajs/vue3';
+</script>
+
+<template>
+    <Head title="Create Purchase Order" />
+    <AuthenticatedLayout>
+        <template #header>
+            <h2 class="font-bold text-xl leading-tight">Create Purchase Order</h2>
+        </template>
+        <Container :spaced-mobile="false">
+            <div class="py-12">
+                <ResponsiveCard>
+                    <CreatePurchaseOrder />
+                </ResponsiveCard>
+            </div>
+        </Container>
+    </AuthenticatedLayout>
+</template>
+
+
+==== resources\js\Pages\PurchaseOrders\CreatePurchaseOrder.vue ====
+
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+import { useForm } from '@inertiajs/vue3';
+import { usePurchaseOrderStore } from '@/Stores/purchaseOrderStore';
+import SupplierSelection from './SupplierSelection.vue';
+import PartSelector from './PartSelector.vue';
+import AddressDisplay from '@/Components/AddressDisplay.vue';
+import Button from 'primevue/button';
+import Toast from 'primevue/toast';
+import { useToast } from 'primevue/usetoast';
+import Dialog from 'primevue/dialog';
+import PurchaseOrderPackingList from './PurchaseOrderPackingList.vue';
+
+const store = usePurchaseOrderStore();
+const toast = useToast();
+
+const loading = ref(false);
+const showPackingList = ref(false);
+const debugInfo = ref('');
+
+const form = useForm({
+    supplier_id: null,
+    parts: [],
+    bill_to_location_id: null,
+    ship_to_location_id: null,
+    bill_to_address_index: null,
+    ship_from_address_index: null,
+    ship_to_address_index: null
+});
+
+const onSupplierSelected = async (supplierData) => {
+    loading.value = true;
+    debugInfo.value += `Supplier selected: ${JSON.stringify(supplierData)}\n`;
+    try {
+        await store.setSupplier(supplierData);
+        debugInfo.value += `Supplier set in store\n`;
+        await store.fetchSupplierLocations();
+        debugInfo.value += `Supplier locations fetched\n`;
+        await store.fetchSupplierParts();
+        debugInfo.value += `Supplier parts fetched: ${store.supplierParts.length} parts\n`;
+    } catch (error) {
+        console.error('Error fetching supplier data:', error);
+        debugInfo.value += `Error fetching supplier data: ${error.message}\n`;
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load supplier data', life: 3000 });
+    } finally {
+        loading.value = false;
+    }
+};
+
+const canCreatePurchaseOrder = computed(() => {
+    return store.supplier &&
+           store.selectedParts.length > 0 &&
+           store.billToLocation &&
+           store.shipToLocation &&
+           store.shipFromLocation;
+});
+
+const createPurchaseOrder = () => {
+    if (!canCreatePurchaseOrder.value) {
+        debugInfo.value += `Cannot create purchase order: ${JSON.stringify({
+            supplier: !!store.supplier,
+            selectedParts: store.selectedParts.length,
+            billToLocation: !!store.billToLocation,
+            shipToLocation: !!store.shipToLocation,
+            shipFromLocation: !!store.shipFromLocation
+        })}\n`;
+        return;
+    }
+
+    form.supplier_id = store.supplier.id;
+    form.parts = store.selectedParts.map(part => ({
+        id: part.id,
+        quantity: part.quantity,
+        unit_cost: part.unit_cost
+    }));
+    form.bill_to_location_id = store.billToLocation.id;
+    form.ship_to_location_id = store.shipToLocation.id;
+    form.ship_from_address_index = store.shipFromAddressIndex;
+
+    debugInfo.value += `Submitting purchase order: ${JSON.stringify(form)}\n`;
+
+    form.post(route('purchase-orders.store'), {
+        preserveState: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.add({ severity: 'success', summary: 'Success', detail: 'Purchase Order created successfully', life: 3000 });
+            store.reset();
+            form.reset();
+            debugInfo.value += `Purchase order created successfully\n`;
+        },
+        onError: (errors) => {
+            toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create Purchase Order', life: 3000 });
+            debugInfo.value += `Error creating purchase order: ${JSON.stringify(errors)}\n`;
+        }
+    });
+};
+
+const openPackingList = () => {
+    showPackingList.value = true;
+};
+
+const closePackingList = () => {
+    showPackingList.value = false;
+};
+
+onMounted(async () => {
+    loading.value = true;
+    try {
+        debugInfo.value += `Fetching warehouse locations\n`;
+        await store.fetchWarehouseLocations();
+        debugInfo.value += `Warehouse locations fetched\n`;
+    } catch (error) {
+        console.error('Error fetching warehouse locations:', error);
+        debugInfo.value += `Error fetching warehouse locations: ${error.message}\n`;
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load warehouse locations', life: 3000 });
+    } finally {
+        loading.value = false;
+    }
+});
+</script>
+
+<template>
+    <div>
+        <SupplierSelection @supplier-selected="onSupplierSelected" />
+
+        <div v-if="store.supplier" class="bg-surface-0 dark:bg-surface-950 px-6 py-8 md:px-12 lg:px-20 mt-4">
+            <div class="flex items-start flex-col lg:justify-between lg:flex-row">
+                <div>
+                    <div class="font-medium text-3xl text-surface-900 dark:text-surface-0">Supplier Parts</div>
+                    <div class="flex items-center text-surface-700 dark:text-surface-100 flex-wrap">
+                        <div class="mr-8 flex items-center mt-4">
+                            <i class="pi pi-box mr-2" />
+                            <span>{{ store.supplierParts.length }} Associated Parts</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mt-4">
+            <AddressDisplay
+                title="Ship From Address"
+                :address="store.shipFromLocation"
+                :loading="loading"
+            />
+            <AddressDisplay
+                title="Ship To Address"
+                :address="store.shipToLocation"
+                :loading="loading"
+            />
+            <AddressDisplay
+                title="Bill To Address"
+                :address="store.billToLocation"
+                :loading="loading"
+            />
+            <AddressDisplay
+                title="Return To Address"
+                :address="store.returnToLocation"
+                :loading="loading"
+            />
+        </div>
+
+        <PartSelector v-if="store.supplier && store.supplierParts.length > 0" />
+
+        <div v-else-if="store.supplier" class="mt-4 p-4 bg-yellow-100 text-yellow-700 rounded">
+            No parts found for this supplier.
+        </div>
+
+        <div class="mt-4 flex justify-between">
+            <Button label="Create Purchase Order" @click="createPurchaseOrder" :disabled="!canCreatePurchaseOrder" />
+            <Button label="Print Preview" icon="pi pi-print" @click="openPackingList" :disabled="!canCreatePurchaseOrder" />
+        </div>
+
+        <Dialog v-model:visible="showPackingList" modal header="Purchase Order Packing List" :style="{ width: '80vw' }">
+            <PurchaseOrderPackingList />
+            <template #footer>
+                <Button label="Print" icon="pi pi-print" @click="window.print()" autofocus />
+                <Button label="Close" icon="pi pi-times" @click="closePackingList" class="p-button-text" />
+            </template>
+        </Dialog>
+
+        <div v-if="debugInfo" class="mt-4 p-4 bg-gray-100 rounded">
+            <h4 class="font-bold mb-2">Debug Information:</h4>
+            <pre class="whitespace-pre-wrap">{{ debugInfo }}</pre>
+        </div>
+
+        <div v-if="store.debugLog" class="mt-4 p-4 bg-gray-100 rounded">
+            <h4 class="font-bold mb-2">Store Debug Log:</h4>
+            <pre class="whitespace-pre-wrap">{{ store.debugLog }}</pre>
+        </div>
+    </div>
+    <Toast />
+</template>
+
+
+==== resources\js\Pages\PurchaseOrders\Index.vue ====
+
+<script setup>
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head } from '@inertiajs/vue3';
+</script>
+
+<template>
+    <Head title="Purchase Orders" />
+
+    <AuthenticatedLayout>
+        <template #header>
+            <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Purchase Orders</h2>
+        </template>
+
+        <div class="py-12">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 text-gray-900 dark:text-gray-100">
+                        Purchase Orders Index Page
+                    </div>
+                </div>
+            </div>
+        </div>
+    </AuthenticatedLayout>
+</template>
+
+
+==== resources\js\Pages\PurchaseOrders\PartSelector.vue ====
+
+<template>
+    <div class="mt-4">
+        <h3 class="text-lg font-semibold mb-2">Select Parts</h3>
+        <DataTable
+            :value="supplierParts"
+            v-model:selection="selectedParts"
+            :paginator="true"
+            :rows="10"
+            dataKey="id"
+            :filters="filters"
+            filterDisplay="menu"
+            :loading="loading"
+            :globalFilterFields="['part_number', 'description']"
+        >
+            <template #header>
+                <div class="flex justify-content-end">
+                    <span class="p-input-icon-left">
+                        <i class="pi pi-search" />
+                        <InputText v-model="filters['global'].value" placeholder="Keyword Search" />
+                    </span>
+                </div>
+            </template>
+
+            <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
+            <Column field="part_number" header="Part Number" :sortable="true">
+                <template #body="slotProps">
+                    {{ slotProps.data.part_number }}
+                </template>
+                <template #filter="{ filterModel }">
+                    <InputText v-model="filterModel.value" type="text" class="p-column-filter" placeholder="Search by Part Number" />
+                </template>
+            </Column>
+            <Column field="description" header="Description" :sortable="true">
+                <template #body="slotProps">
+                    {{ slotProps.data.description }}
+                </template>
+                <template #filter="{ filterModel }">
+                    <InputText v-model="filterModel.value" type="text" class="p-column-filter" placeholder="Search by Description" />
+                </template>
+            </Column>
+            <Column field="unit_cost" header="Unit Cost" :sortable="true">
+                <template #body="slotProps">
+                    <InputNumber v-model="slotProps.data.unit_cost" mode="currency" currency="USD" locale="en-US" :minFractionDigits="2" readonly />
+                </template>
+            </Column>
+            <Column field="quantity" header="Quantity">
+                <template #body="slotProps">
+                    <InputNumber v-model="slotProps.data.quantity" :min="0" @input="updateTotalCost(slotProps.data)" showButtons buttonLayout="horizontal" incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus" />
+                </template>
+            </Column>
+            <Column field="total_cost" header="Total Cost">
+                <template #body="slotProps">
+                    <InputNumber v-model="slotProps.data.total_cost" mode="currency" currency="USD" locale="en-US" :minFractionDigits="2" readonly />
+                </template>
+            </Column>
+        </DataTable>
+        <div class="mt-4 text-right">
+            <h4 class="text-lg font-semibold">Total Order Cost: {{ formatCurrency(totalOrderCost) }}</h4>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue';
+import axios from 'axios';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import InputNumber from 'primevue/inputnumber';
+import InputText from 'primevue/inputtext';
+
+// Define FilterMatchMode and FilterOperator manually
+const FilterMatchMode = {
+    STARTS_WITH: 'startsWith',
+    CONTAINS: 'contains',
+    EQUALS: 'equals',
+};
+
+const FilterOperator = {
+    AND: 'and',
+    OR: 'or',
+    EQ: '=',
+};
+
+interface PartData {
+    id: number;
+    part_number: string;
+    description: string;
+    unit_cost: number;
+    quantity: number;
+    total_cost: number;
+    replenishment_data: {
+        purchaseTerms: Array<{
+            cost_per_part: number;
+        }>;
+    };
+}
+
+const props = defineProps({
+    supplierId: {
+        type: Number,
+        required: true
+    }
+});
+
+const emit = defineEmits(['update:selectedParts']);
+
+const supplierParts = ref<PartData[]>([]);
+const selectedParts = ref<PartData[]>([]);
+const loading = ref(false);
+const filters = ref({
+    global: { value: null, matchMode: FilterMatchMode.CONTAINS },
+    part_number: { value: null, matchMode: FilterMatchMode.STARTS_WITH },
+    description: { value: null, matchMode: FilterMatchMode.CONTAINS },
+});
+
+watch(() => props.supplierId, (newSupplierId) => {
+    if (newSupplierId) {
+        loadParts();
+    }
+});
+
+watch(selectedParts, (newSelectedParts) => {
+    emit('update:selectedParts', newSelectedParts);
+}, { deep: true });
+
+const loadParts = async () => {
+    loading.value = true;
+    try {
+        const response = await axios.post('/api/parts/search', {
+            filters: [
+                { field: 'supplier_id', operator: FilterOperator.EQ, value: props.supplierId }
+            ]
+        });
+        supplierParts.value = response.data.data.map((part: any) => ({
+            id: part.id,
+            part_number: part.part_number,
+            description: part.description,
+            unit_cost: part.replenishment_data.purchaseTerms[0].cost_per_part,
+            quantity: 0,
+            total_cost: 0,
+            replenishment_data: part.replenishment_data
+        }));
+    } catch (error) {
+        console.error('Error fetching parts:', error);
+    } finally {
+        loading.value = false;
+    }
+};
+
+const calculateTotalCost = (part: PartData) => {
+    return part.unit_cost * part.quantity;
+};
+
+const updateTotalCost = (part: PartData) => {
+    part.total_cost = calculateTotalCost(part);
+};
+
+const totalOrderCost = computed(() => {
+    return selectedParts.value.reduce((total, part) => total + calculateTotalCost(part), 0);
+});
+
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+};
+
+const resetSelection = () => {
+    selectedParts.value = [];
+    supplierParts.value.forEach(part => {
+        part.quantity = 0;
+        part.total_cost = 0;
+    });
+};
+
+defineExpose({ selectedParts, resetSelection });
+
+onMounted(() => {
+    if (props.supplierId) {
+        loadParts();
+    }
+});
+</script>
+
+
+==== resources\js\Pages\PurchaseOrders\PurchaseOrderPackingList.vue ====
+
+<script setup>
+import { computed } from 'vue';
+import { usePurchaseOrderStore } from '@/Stores/purchaseOrderStore';
+
+const store = usePurchaseOrderStore();
+
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+};
+
+const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+const subtotal = computed(() => store.subtotal);
+const taxAmount = computed(() => store.taxAmount);
+const total = computed(() => store.total);
+</script>
+
+<template>
+    <div class="p-4">
+        <h1 class="text-2xl font-bold mb-4">Purchase Order Packing List</h1>
+        <p class="mb-4">Date: {{ formatDate(new Date()) }}</p>
+
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div>
+                <h2 class="font-bold">Supplier:</h2>
+                <p>{{ store.shipFromLocation?.name }}</p>
+                <p>{{ store.shipFromLocation?.address1 }}</p>
+                <p v-if="store.shipFromLocation?.address2">{{ store.shipFromLocation.address2 }}</p>
+                <p>{{ store.shipFromLocation?.city }}, {{ store.shipFromLocation?.state }} {{ store.shipFromLocation?.zip }}</p>
+            </div>
+            <div>
+                <h2 class="font-bold">Ship To:</h2>
+                <p>{{ store.shipToLocation?.name }}</p>
+                <p>{{ store.shipToLocation?.address1 }}</p>
+                <p v-if="store.shipToLocation?.address2">{{ store.shipToLocation.address2 }}</p>
+                <p>{{ store.shipToLocation?.city }}, {{ store.shipToLocation?.state }} {{ store.shipToLocation?.zip }}</p>
+            </div>
+            <div>
+                <h2 class="font-bold">Bill To:</h2>
+                <p>{{ store.billToLocation?.name }}</p>
+                <p>{{ store.billToLocation?.address1 }}</p>
+                <p v-if="store.billToLocation?.address2">{{ store.billToLocation.address2 }}</p>
+                <p>{{ store.billToLocation?.city }}, {{ store.billToLocation?.state }} {{ store.billToLocation?.zip }}</p>
+            </div>
+        </div>
+
+        <table class="w-full mb-6">
+            <thead>
+                <tr>
+                    <th class="text-left">Part Number</th>
+                    <th class="text-left">Description</th>
+                    <th class="text-right">Quantity</th>
+                    <th class="text-right">Unit Price</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="part in store.selectedParts" :key="part.id">
+                    <td>{{ part.part_number }}</td>
+                    <td>{{ part.description }}</td>
+                    <td class="text-right">{{ part.quantity }}</td>
+                    <td class="text-right">{{ formatCurrency(part.unit_cost) }}</td>
+                    <td class="text-right">{{ formatCurrency(part.quantity * part.unit_cost) }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="text-right">
+            <p>Subtotal: {{ formatCurrency(subtotal) }}</p>
+            <p>Tax ({{ store.taxRate * 100 }}%): {{ formatCurrency(taxAmount) }}</p>
+            <p class="font-bold">Total: {{ formatCurrency(total) }}</p>
+        </div>
+    </div>
+</template>
+
+<style scoped>
+@media print {
+    .p-4 {
+        padding: 1rem;
+    }
+    @page {
+        size: auto;
+        margin: 20mm;
+    }
+}
+</style>
+
+
+==== resources\js\Pages\PurchaseOrders\Receive.vue ====
+
+<script setup>
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head } from '@inertiajs/vue3';
+</script>
+
+<template>
+    <Head title="Receive Purchase Order" />
+
+    <AuthenticatedLayout>
+        <template #header>
+            <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Receive Purchase Order</h2>
+        </template>
+
+        <div class="py-12">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 text-gray-900 dark:text-gray-100">
+                        Receive Purchase Order Page
+                    </div>
+                </div>
+            </div>
+        </div>
+    </AuthenticatedLayout>
+</template>
+
+
+==== resources\js\Pages\PurchaseOrders\SupplierSelection.vue ====
+
+<template>
+    <div class="mb-4">
+        <h3 class="text-lg font-semibold mb-2">Select Supplier</h3>
+        <Dropdown
+            v-model="selectedSupplier"
+            :options="suppliers"
+            optionLabel="$attributes.name"
+            placeholder="Select a Supplier"
+            class="w-full md:w-14rem"
+            @change="onSupplierChange"
+        />
+        <Card v-if="selectedSupplier" class="mt-4">
+            <template #title>
+                {{ selectedSupplier.$attributes.name }}
+            </template>
+            <template #content>
+                <p><strong>Account Number:</strong> {{ selectedSupplier.$attributes.account_number }}</p>
+                <p><strong>Payment Terms:</strong> {{ selectedSupplier.$attributes.payment_terms }}</p>
+                <div v-if="shipFromAddress">
+                    <h4 class="font-semibold mt-2">Ship From Address:</h4>
+                    <p>{{ shipFromAddress.address1 }}</p>
+                    <p v-if="shipFromAddress.address2">{{ shipFromAddress.address2 }}</p>
+                    <p>{{ shipFromAddress.city }}, {{ shipFromAddress.state_prov_code }} {{ shipFromAddress.zip }}</p>
+                </div>
+            </template>
+        </Card>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+import { Supplier } from '../../Models/Supplier';
+import Dropdown from 'primevue/dropdown';
+import Card from 'primevue/card';
+
+const emit = defineEmits(['supplier-selected']);
+
+const suppliers = ref<Supplier[]>([]);
+const selectedSupplier = ref<Supplier | null>(null);
+
+const shipFromAddress = computed(() => {
+    if (selectedSupplier.value && selectedSupplier.value.$attributes.addresses) {
+        return selectedSupplier.value.$attributes.addresses.shipFrom?.[0] || null;
+    }
+    return null;
+});
+
+const onSupplierChange = () => {
+    if (selectedSupplier.value) {
+        emit('supplier-selected', {
+            id: selectedSupplier.value.$getKey(),
+            shipFromAddressIndex: 0, // Assuming we're always using the first address
+            supplier: selectedSupplier.value
+        });
+    }
+};
+
+onMounted(async () => {
+    try {
+        const response = await Supplier.$query().get();
+        suppliers.value = response;
+    } catch (error) {
+        console.error('Error fetching suppliers:', error);
+    }
+});
+</script>
+
+
+==== resources\js\Stores\purchaseOrderStore.js ====
+
+import { defineStore } from 'pinia';
+import { Supplier } from '@/Models/Supplier';
+import { Location } from '@/Models/Location';
+import { Part } from '@/Models/Part';
+
+export const usePurchaseOrderStore = defineStore('purchaseOrder', {
+  state: () => ({
+    supplier: null,
+    supplierParts: [],
+    selectedParts: [],
+    billToLocation: null,
+    shipToLocation: null,
+    shipFromLocation: null,
+    returnToLocation: null,
+    shipFromAddressIndex: 0,
+    taxRate: 0.08, // 8% tax rate, you may want to make this configurable
+    debugLog: '',
+  }),
+
+  getters: {
+    subtotal: (state) => {
+      return state.selectedParts.reduce((total, part) => {
+        return total + (part.quantity * part.unit_cost);
+      }, 0);
+    },
+    taxAmount: (state) => state.subtotal * state.taxRate,
+    total: (state) => state.subtotal + state.taxAmount,
+  },
+
+  actions: {
+    log(message) {
+      console.log(message);
+      this.debugLog += message + '\n';
+    },
+
+    async setSupplier(supplierData) {
+      this.log(`Setting supplier: ${JSON.stringify(supplierData)}`);
+      this.supplier = supplierData.supplier;
+      this.shipFromAddressIndex = supplierData.shipFromAddressIndex;
+    },
+
+    async fetchSupplierLocations() {
+      if (!this.supplier) {
+        this.log('No supplier set, cannot fetch locations');
+        return;
+      }
+
+      try {
+        this.log(`Fetching locations for supplier ID: ${this.supplier.id}`);
+        const response = await Location.$query()
+          .filter('supplier_id', '=', this.supplier.id)
+          .get();
+
+        this.log(`Supplier locations response: ${JSON.stringify(response)}`);
+
+        if (response.data && response.data.length > 0) {
+          const supplierLocation = response.data[0];
+          this.shipFromLocation = supplierLocation.addresses?.shipFrom?.[this.shipFromAddressIndex] || null;
+          this.returnToLocation = supplierLocation.addresses?.returnTo?.[0] || null;
+          this.log(`Set shipFromLocation: ${JSON.stringify(this.shipFromLocation)}`);
+          this.log(`Set returnToLocation: ${JSON.stringify(this.returnToLocation)}`);
+        } else {
+          this.log('No supplier locations found');
+          // If no locations are found, use the supplier's address data
+          this.shipFromLocation = this.supplier.addresses?.shipFrom?.[this.shipFromAddressIndex] || null;
+          this.returnToLocation = this.supplier.addresses?.returnTo?.[0] || null;
+          this.log(`Using supplier address data for locations`);
+        }
+      } catch (error) {
+        this.log(`Error fetching supplier locations: ${error.message}`);
+        throw error;
+      }
+    },
+
+    async fetchSupplierParts() {
+      if (!this.supplier) {
+        this.log('No supplier set, cannot fetch parts');
+        return;
+      }
+
+      try {
+        this.log(`Fetching parts for supplier ID: ${this.supplier.id}`);
+        const response = await Part.$query()
+          .filter('supplier_id', '=', this.supplier.id)
+          .get();
+
+        this.log(`Supplier parts response: ${JSON.stringify(response)}`);
+
+        if (response.data && response.data.length > 0) {
+          this.supplierParts = response.data.map(part => ({
+            ...part,
+            quantity: 0,
+            total_cost: 0,
+          }));
+          this.log(`Set supplierParts: ${this.supplierParts.length} parts`);
+        } else {
+          this.log('No parts found for this supplier');
+          this.supplierParts = [];
+        }
+      } catch (error) {
+        this.log(`Error fetching supplier parts: ${error.message}`);
+        throw error;
+      }
+    },
+
+    async fetchWarehouseLocations() {
+      try {
+        this.log('Fetching warehouse locations');
+        const response = await Location.$query()
+          .filter('type', '=', 'warehouse')
+          .get();
+
+        this.log(`Warehouse locations response: ${JSON.stringify(response)}`);
+
+        if (response.data && response.data.length > 0) {
+          const warehouseLocation = response.data[0];
+          this.billToLocation = warehouseLocation.addresses?.billTo?.[0] || null;
+          this.shipToLocation = warehouseLocation.addresses?.shipTo?.[0] || null;
+          this.log(`Set billToLocation: ${JSON.stringify(this.billToLocation)}`);
+          this.log(`Set shipToLocation: ${JSON.stringify(this.shipToLocation)}`);
+        }
+
+        if (!this.billToLocation || !this.shipToLocation) {
+          this.log('Not enough locations found');
+          throw new Error('Not enough locations found');
+        }
+      } catch (error) {
+        this.log(`Error fetching warehouse locations: ${error.message}`);
+        throw error;
+      }
+    },
+
+    updateSelectedParts(parts) {
+      this.log(`Updating selected parts: ${JSON.stringify(parts)}`);
+      this.selectedParts = parts;
+    },
+
+    reset() {
+      this.log('Resetting store');
+      this.supplier = null;
+      this.supplierParts = [];
+      this.selectedParts = [];
+      this.shipFromLocation = null;
+      this.returnToLocation = null;
+      this.debugLog = '';
+    },
+  },
+});
+
+
+==== app\Http\Controllers\Api\LocationController.php ====
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Models\Location;
+use Orion\Http\Controllers\Controller;
+use Orion\Concerns\DisableAuthorization;
+
+class LocationController extends Controller
+{
+    use DisableAuthorization;
+
+    protected $model = Location::class;
+
+    public function includes(): array
+    {
+        return ['addresses'];
+    }
+
+    public function filterableBy(): array
+    {
+        return ['id', 'name', 'type'];
+    }
+
+    public function sortableBy(): array
+    {
+        return ['id', 'name', 'type'];
+    }
+
+    public function searchableBy(): array
+    {
+        return ['name'];
+    }
+}
+
+
+==== app\Http\Controllers\Api\PartController.php ====
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Models\Part;
+use Orion\Http\Controllers\Controller;
+use Orion\Concerns\DisableAuthorization;
+
+class PartController extends Controller
+{
+    protected $model = Part::class;
+
+    use DisableAuthorization;
+
+    public function includes(): array
+    {
+        return ['supplier'];
+    }
+
+    public function filterableBy(): array
+    {
+        return ['supplier_id', 'part_number', 'description', 'unit_cost'];
+    }
+
+    public function sortableBy(): array
+    {
+        return ['part_number', 'description', 'unit_cost'];
+    }
+
+    public function searchableBy(): array
+    {
+        return ['part_number', 'description'];
+    }
+}
+
+
+==== app\Http\Controllers\Api\PurchaseOrderController.php ====
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Models\PurchaseOrder;
+use App\Models\Part;
+use App\Models\Location;
+use App\Models\Supplier;
+use Orion\Http\Controllers\Controller;
+use Orion\Concerns\DisableAuthorization;
+use Illuminate\Http\Request;
+use App\Orion\Transformers\AddressDTOTransformer;
+
+class PurchaseOrderController extends Controller
+{
+    use DisableAuthorization;
+
+    protected $model = PurchaseOrder::class;
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'bill_to_address' => AddressDTOTransformer::class,
+        'ship_from_address' => AddressDTOTransformer::class,
+        'ship_to_address' => AddressDTOTransformer::class,
+    ];
+
+    public function store(Request $request)
+    {
+        $validatedData = $request->validate([
+            'supplier_id' => 'required|exists:suppliers,id',
+            'bill_to_location_id' => 'required|exists:locations,id',
+            'ship_to_location_id' => 'required|exists:locations,id',
+            'bill_to_address_index' => 'required|integer|min:0',
+            'ship_from_address_index' => 'required|integer|min:0',
+            'ship_to_address_index' => 'required|integer|min:0',
+            'parts' => 'required|array',
+            'parts.*.id' => 'required|exists:parts,id',
+            'parts.*.quantity' => 'required|integer|min:1',
+        ]);
+
+        $supplier = Supplier::findOrFail($validatedData['supplier_id']);
+        $billToLocation = Location::findOrFail($validatedData['bill_to_location_id']);
+        $shipToLocation = Location::findOrFail($validatedData['ship_to_location_id']);
+
+        $purchaseOrder = PurchaseOrder::create([
+            'supplier_id' => $validatedData['supplier_id'],
+            'bill_to_location_id' => $validatedData['bill_to_location_id'],
+            'ship_to_location_id' => $validatedData['ship_to_location_id'],
+            'bill_to_address_index' => $validatedData['bill_to_address_index'],
+            'ship_from_address_index' => $validatedData['ship_from_address_index'],
+            'ship_to_address_index' => $validatedData['ship_to_address_index'],
+        ]);
+
+        foreach ($validatedData['parts'] as $partData) {
+            $part = Part::findOrFail($partData['id']);
+            $purchaseOrder->parts()->attach($part->id, [
+                'quantity' => $partData['quantity'],
+                'unit_cost' => $part->replenishment_data['purchaseTerms'][0]['cost_per_part'] ?? $part->unit_cost,
+            ]);
+        }
+
+        $purchaseOrder->load('parts', 'supplier', 'location');
+
+        return response()->json($purchaseOrder, 201);
+    }
+
+    public function includes(): array
+    {
+        return ['supplier', 'parts', 'location'];
+    }
+
+    public function filterableBy(): array
+    {
+        return ['supplier_id', 'location_id', 'created_at'];
+    }
+
+    public function sortableBy(): array
+    {
+        return ['created_at', 'total_cost'];
+    }
+
+    protected function afterSave(Request $request, $entity)
+    {
+        $entity->load('parts', 'supplier', 'location');
+    }
+
+    protected function afterFetch($entity)
+    {
+        $entity->load('parts', 'supplier', 'location');
+        return $entity;
+    }
+}
+
+
+==== app\Http\Controllers\Api\SupplierController.php ====
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Models\Supplier;
+use Orion\Concerns\DisableAuthorization;
+use Orion\Http\Controllers\Controller;
+
+class SupplierController extends Controller
+{
+    protected $model = Supplier::class;
+
+    use DisableAuthorization;
+    public function includes(): array
+    {
+        return ['locations'];
+    }
+}
+
+
+==== app\DTOs\AddressDTO.php ====
+
+<?php
+
+namespace App\DTOs;
+
+use Spatie\LaravelData\Data;
+use Spatie\LaravelData\DataCollection;
+
+/** @typescript */
+class AddressDTO extends Data
+{
+    public function __construct(
+        public ?string $address1 = null,
+        public ?string $address2 = null,
+        public ?string $city = null,
+        public ?string $state_prov_code = null,
+        public ?string $zip = null,
+        public ?string $phone_number = null,
+        public ?string $email_address = null
+    ) {}
+
+    public static function collection(array $data): DataCollection
+    {
+        return new DataCollection(AddressDTO::class, array_map(fn($item) => new self(...$item), $data));
+    }
+}
+
+
+==== app\DTOs\IdentifierData.php ====
+
+<?php
+
+namespace App\DTOs;
+
+use Spatie\LaravelData\Data;
+
+/** @typescript */
+class IdentifierData extends Data
+{
+    public function __construct(
+        public ?string $type = null,
+        public ?string $value = null
+    ) {}
+}
+
+
+==== app\DTOs\IdentifierDTO.php ====
+
+<?php
+
+namespace App\DTOs;
+
+use Illuminate\Support\Collection;
+use Spatie\LaravelData\Attributes\DataCollectionOf;
+use Spatie\LaravelData\Data;
+
+/** @typescript */
+class IdentifierDTO extends Data
+{
+    /**
+     * @param Collection<int, IdentifierData> $identifiers
+     */
+    public function __construct(
+        #[DataCollectionOf(IdentifierData::class)]
+        public Collection $identifiers
+    ) {}
+
+    public static function fromArray(array $data): self
+    {
+        $identifiers = collect($data)->map(function ($item) {
+            return new IdentifierData(
+                $item['type'] ?? null,
+                $item['value'] ?? null
+            );
+        });
+
+        return new self($identifiers);
+    }
+}
+
+
+==== app\DTOs\LocationAddressesDTO.php ====
+
+<?php
+
+namespace App\DTOs;
+
+use Spatie\LaravelData\Data;
+use Spatie\LaravelData\Attributes\DataCollectionOf;
+use Spatie\LaravelData\DataCollection;
+
+/** @typescript */
+class LocationAddressesDTO extends Data
+{
+    public function __construct(
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $billTo = null,
+
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $shipFrom = null,
+
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $shipTo = null,
+
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $other = null
+    ) {}
+
+    public static function fromArray(array|string $data): self
+    {
+        if (is_string($data)) {
+            $data = json_decode($data, true);
+        }
+
+        return new self(
+            billTo: isset($data['billTo']) ? AddressDTO::collection($data['billTo']) : null,
+            shipFrom: isset($data['shipFrom']) ? AddressDTO::collection($data['shipFrom']) : null,
+            shipTo: isset($data['shipTo']) ? AddressDTO::collection($data['shipTo']) : null,
+            other: isset($data['other']) ? AddressDTO::collection($data['other']) : null
+        );
+    }
+
+    public function toArray(): array
+    {
+        return [
+            'billTo' => $this->billTo?->toArray(),
+            'shipFrom' => $this->shipFrom?->toArray(),
+            'shipTo' => $this->shipTo?->toArray(),
+            'other' => $this->other?->toArray(),
+        ];
+    }
+}
+
+
+==== app\DTOs\ReplenishmentDataDTO.php ====
+
+<?php
+
+namespace App\DTOs;
+
+use Spatie\LaravelData\Data;
+use Spatie\LaravelData\Attributes\MapInputName;
+
+/** @typescript */
+class ReplenishmentDataDTO extends Data
+{
+    public function __construct(
+        public int $lead_days,
+        #[MapInputName('purchase_terms')]
+        /** @var array<int, array{minimum_quantity: int, cost_per_part: float}> */
+        public array $purchaseTerms
+    ) {}
+}
+
+
+==== app\DTOs\SupplierAddressesDTO.php ====
+
+<?php
+
+namespace App\DTOs;
+
+use Spatie\LaravelData\Data;
+use Spatie\LaravelData\Attributes\DataCollectionOf;
+use Spatie\LaravelData\DataCollection;
+
+/** @typescript */
+class SupplierAddressesDTO extends Data
+{
+    public function __construct(
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $billTo = null,
+
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $shipFrom = null,
+
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $shipTo = null,
+
+        #[DataCollectionOf(AddressDTO::class)]
+        public ?DataCollection $returnTo = null
+    ) {}
+
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            billTo: isset($data['billTo']) ? AddressDTO::collection($data['billTo']) : null,
+            shipFrom: isset($data['shipFrom']) ? AddressDTO::collection($data['shipFrom']) : null,
+            shipTo: isset($data['shipTo']) ? AddressDTO::collection($data['shipTo']) : null,
+            returnTo: isset($data['returnTo']) ? AddressDTO::collection($data['returnTo']) : null
+        );
+    }
+
+    public function toArray(): array
+    {
+        return [
+            'billTo' => $this->billTo?->toArray(),
+            'shipFrom' => $this->shipFrom?->toArray(),
+            'shipTo' => $this->shipTo?->toArray(),
+            'returnTo' => $this->returnTo?->toArray(),
+        ];
+    }
+}
+
+
+==== app\Models\BillOfMaterial.php ====
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class BillOfMaterial extends Model
+{
+    use HasFactory;
+
+    protected $table = 'bills_of_material';
+
+    protected $fillable = [
+        'product_id',
+        'part_id',
+        'quantity_required',
+    ];
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function part(): BelongsTo
+    {
+        return $this->belongsTo(Part::class);
+    }
+}
+
+
+==== app\Models\Brand.php ====
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Brand extends Model
+{
+    use HasFactory;
+}
+
+
+==== app\Models\Dimension.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\Enums\DimensionType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Facades\Log;
+
+class Dimension extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'length',
+        'width',
+        'height',
+        'unit',
+        'type',
+        'volume',
+    ];
+
+    protected $casts = [
+        'type' => DimensionType::class,
+    ];
+
+    protected static function booted()
+    {
+        static::saving(function ($dimension) {
+            $dimension->calculateVolume();
+        });
+    }
+
+    public function calculateVolume(): void
+    {
+        try {
+            $this->volume = $this->length * $this->width * $this->height;
+        } catch (\Exception $e) {
+            Log::error('Error calculating volume: ' . $e->getMessage());
+        }
+    }
+
+    public function getFormattedDimensionsAttribute(): string
+    {
+        return "{$this->length} x {$this->width} x {$this->height} {$this->unit}";
+    }
+
+    public function scopeOfType($query, DimensionType $type)
+    {
+        return $query->where('type', $type->value);
+    }
+
+    public static function findByAttributesOrFail(array $attributes)
+    {
+        $query = static::query();
+
+        foreach ($attributes as $key => $value) {
+            $query->where($key, $value);
+        }
+
+        $result = $query->first();
+
+        if (! $result) {
+            throw (new ModelNotFoundException)->setModel(
+                static::class,
+                array_values($attributes)
+            );
+        }
+
+        return $result;
+    }
+
+    public static function findByDimensionsOrFail(array $dimensions, ?string $unit = null)
+    {
+        if (count($dimensions) !== 3) {
+            throw new \InvalidArgumentException('Dimensions array must contain exactly 3 values [L, W, H]');
+        }
+
+        [$length, $width, $height] = $dimensions;
+
+        $query = static::query()
+            ->where('length', $length)
+            ->where('width', $width)
+            ->where('height', $height);
+
+        if ($unit !== null) {
+            $query->where('unit', $unit);
+        }
+
+        $result = $query->first();
+
+        if (! $result) {
+            throw (new ModelNotFoundException)->setModel(
+                static::class,
+                [$length, $width, $height, $unit]
+            );
+        }
+
+        return $result;
+    }
+
+    public function parts(): MorphToMany
+    {
+        return $this->morphedByMany(Part::class, 'dimensionable')->withPivot('dimensionable_type');
+    }
+
+    public function products(): MorphToMany
+    {
+        return $this->morphedByMany(Product::class, 'dimensionable')->withPivot('dimensionable_type');
+    }
+
+    public function morphedByMany($related, $name, $table = null, $foreignPivotKey = null, $relatedPivotKey = null, $parentKey = null, $relatedKey = null, $inverse = false)
+    {
+        $relation = parent::morphedByMany($related, $name, $table, $foreignPivotKey, $relatedPivotKey, $parentKey, $relatedKey, $inverse);
+
+        $relation->withPivot('dimensionable_type');
+
+        return $relation;
+    }
+}
+
+
+==== app\Models\Gtin.php ====
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Gtin extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['gtin', 'status', 'lease_end_date', 'product_id'];
+
+    protected $casts = [
+        'gtin' => 'string',
+        'status' => 'string',
+        'lease_end_date' => 'date',
+    ];
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+}
+
+
+==== app\Models\Inventory.php ====
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Inventory extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'location_id',
+        'inventoryable_id',
+        'inventoryable_type',
+        'quantity_onhand',
+        'quantity_intransit',
+        'quantity_backordered',
+        'quantity_allocated',
+        'quantity_reserved',
+        'version',
+    ];
+
+    protected $casts = [
+        'quantity_onhand' => 'integer',
+        'quantity_intransit' => 'integer',
+        'quantity_backordered' => 'integer',
+        'quantity_allocated' => 'integer',
+        'quantity_reserved' => 'integer',
+        'version' => 'integer',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    public static function boot()
+    {
+        parent::boot();
+
+        static::updating(function ($model) {
+            if ($model->isDirty('version')) {
+                throw new \Exception('This inventory has been modified. Please retry the operation.');
+            }
+            $model->version++;
+        });
+    }
+
+    public function inventoryable()
+    {
+        return $this->morphTo();
+    }
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class);
+    }
+
+    /**
+     * Get the total available quantity.
+     *
+     * @return int
+     */
+    public function getAvailableQuantityAttribute()
+    {
+        return $this->quantity_onhand - $this->quantity_allocated - $this->quantity_reserved;
+    }
+
+    /**
+     * Get the total quantity.
+     *
+     * @return int
+     */
+    public function getTotalQuantityAttribute()
+    {
+        return $this->quantity_onhand + $this->quantity_intransit;
+    }
+}
+
+
+==== app\Models\InventoryTransaction.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\InventoryTransactions\Enums\TransactionType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
+
+class InventoryTransaction extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'ulid',
+        'batch_id',
+        'inventoryable_type',
+        'inventoryable_id',
+        'quantity',
+        'transaction_type',
+        'from_location_id',
+        'to_location_id',
+        'reason',
+        'user_id',
+    ];
+
+    protected $casts = [
+        'quantity' => 'integer',
+        'transaction_type' => TransactionType::class,
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    protected $appends = ['action'];
+
+    public function addTransaction(InventoryTransaction $transaction): void
+    {
+        $transaction->batch_id = $this->id;
+        $transaction->save();
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            $model->ulid = $model->ulid ?? (string) Str::ulid();
+        });
+    }
+
+    public function isDeduction(): bool
+    {
+        return in_array($this->transaction_type, [
+            TransactionType::ISSUE,
+            TransactionType::TRANSFER,
+            TransactionType::ALLOCATE,
+            TransactionType::RESERVE,
+        ]);
+    }
+
+    public function isAddition(): bool
+    {
+        return in_array($this->transaction_type, [
+            TransactionType::RECEIPT,
+            TransactionType::RETURN,
+        ]);
+    }
+
+    public function isNeutral(): bool
+    {
+        return in_array($this->transaction_type, [
+            TransactionType::ADJUSTMENT,
+            TransactionType::CYCLE_COUNT,
+            TransactionType::BACKORDER,
+        ]);
+    }
+
+    public function getActionAttribute(): string
+    {
+        return $this->transaction_type->value;
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(InventoryTransactionBatch::class, 'batch_id');
+    }
+
+    public function inventoryable()
+    {
+        return $this->morphTo();
+    }
+
+    public function fromLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'from_location_id');
+    }
+
+    public function toLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'to_location_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+}
+
+
+==== app\Models\InventoryTransactionBatch.php ====
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
+
+class InventoryTransactionBatch extends Model
+{
+    use HasFactory;
+
+    const STATUS_PENDING = 'pending';
+
+    const STATUS_PROCESSING = 'processing';
+
+    const STATUS_COMPLETED = 'completed';
+
+    const STATUS_FAILED = 'failed';
+
+    protected $fillable = [
+        'ulid',
+        'description',
+        'status',
+        'reference_type',
+        'reference_id',
+        'user_id',
+    ];
+
+    protected $casts = [
+        'ulid' => 'string',
+        'description' => 'string',
+        'status' => 'string',
+    ];
+
+    public function addTransaction(InventoryTransaction $transaction): void
+    {
+        $transaction->batch_id = $this->id;
+        $transaction->save();
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            $model->ulid = $model->ulid ?? (string) Str::ulid();
+        });
+    }
+
+    public function reference()
+    {
+        return $this->morphTo();
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(InventoryTransaction::class, 'batch_id');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function markAsProcessing(): void
+    {
+        $this->update(['status' => self::STATUS_PROCESSING]);
+    }
+
+    public function markAsCompleted(): void
+    {
+        $this->update([
+            'status' => self::STATUS_COMPLETED,
+            'processed_at' => now(),
+        ]);
+    }
+
+    public function markAsFailed(): void
+    {
+        $this->update(['status' => self::STATUS_FAILED]);
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
+    public function isProcessing(): bool
+    {
+        return $this->status === self::STATUS_PROCESSING;
+    }
+
+    public function isCompleted(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    public function isFailed(): bool
+    {
+        return $this->status === self::STATUS_FAILED;
+    }
+}
+
+
+==== app\Models\Location.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\DTOs\LocationAddressesDTO;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
+
+class Location extends Model
+{
+    use HasFactory;
+
+    const TYPE_WAREHOUSE = 'warehouse';
+    const TYPE_SUPPLIER = 'supplier';
+    const TYPE_RACK = 'rack';
+    const TYPE_BIN = 'bin';
+    const TYPE_VIRTUAL = 'virtual';
+
+    const VIRTUAL_TYPE_BILL_TO = 'bill_to';
+    const VIRTUAL_TYPE_SHIP_TO = 'ship_to';
+    const VIRTUAL_TYPE_WORK_ORDER = 'work_order';
+
+    protected $fillable = [
+        'name',
+        'virtual_type',
+        'addresses',
+        'type',
+        'parent_id',
+        'supplier_id',
+    ];
+
+    protected $casts = [
+        'addresses' => LocationAddressesDTO::class,
+    ];
+
+    protected static $hierarchyMap = [
+        self::TYPE_WAREHOUSE => null,
+        self::TYPE_SUPPLIER => null,
+        self::TYPE_RACK => self::TYPE_WAREHOUSE,
+        self::TYPE_BIN => self::TYPE_RACK,
+        self::TYPE_VIRTUAL => [self::TYPE_WAREHOUSE, self::TYPE_SUPPLIER],
+    ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($location) {
+            $location->validateHierarchy();
+        });
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(Location::class, 'parent_id');
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+    protected function validateHierarchy()
+    {
+        $allowedParentType = self::$hierarchyMap[$this->type] ?? null;
+
+        if ($allowedParentType === null && $this->parent_id !== null) {
+            throw ValidationException::withMessages([
+                'parent_id' => ucfirst($this->type) . ' cannot have a parent location.',
+            ]);
+        }
+
+        if ($allowedParentType !== null && $this->parent_id === null) {
+            $errorMessage = $this->getParentTypeErrorMessage($allowedParentType);
+            throw ValidationException::withMessages([
+                'parent_id' => $errorMessage,
+            ]);
+        }
+
+        if ($allowedParentType !== null && $this->parent) {
+            $isValidParent = is_array($allowedParentType)
+                ? in_array($this->parent->type, $allowedParentType)
+                : $this->parent->type === $allowedParentType;
+
+            if (!$isValidParent) {
+                $errorMessage = $this->getParentTypeErrorMessage($allowedParentType);
+                throw ValidationException::withMessages([
+                    'parent_id' => $errorMessage,
+                ]);
+            }
+        }
+    }
+
+    protected function getParentTypeErrorMessage($allowedParentType): string
+    {
+        if (is_array($allowedParentType)) {
+            $parentTypes = array_map('ucfirst', $allowedParentType);
+            return ucfirst($this->type) . ' must have a ' . implode(' or ', $parentTypes) . ' as parent.';
+        }
+        return ucfirst($this->type) . ' must have a ' . ucfirst($allowedParentType) . ' as parent.';
+    }
+
+    public static function getValidTypes(): array
+    {
+        return [
+            self::TYPE_WAREHOUSE,
+            self::TYPE_RACK,
+            self::TYPE_BIN,
+            self::TYPE_VIRTUAL,
+            self::TYPE_SUPPLIER,
+        ];
+    }
+
+    public static function getValidVirtualTypes(): array
+    {
+        return [
+            self::VIRTUAL_TYPE_BILL_TO,
+            self::VIRTUAL_TYPE_SHIP_TO,
+            self::VIRTUAL_TYPE_WORK_ORDER,
+        ];
+    }
+
+    public function inventory(): HasMany
+    {
+        return $this->hasMany(Inventory::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    public function billToPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'bill_to_location_id');
+    }
+
+    public function supplierPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'supplier_location_id');
+    }
+
+    public function shipFromPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'ship_from_location_id');
+    }
+}
+
+
+==== app\Models\Manufacturer.php ====
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Manufacturer extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['name'];
+
+    public function parts(): HasMany
+    {
+        return $this->hasMany(Part::class);
+    }
+}
+
+
+==== app\Models\Part.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\Concerns\HasDimensions;
+use App\DTOs\ReplenishmentDataDTO;
+use App\DTOs\IdentifierDTO;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Spatie\LaravelData\Attributes\DataCollectionOf;
+
+class Part extends Model
+{
+    use HasDimensions, HasFactory;
+
+    protected $fillable = [
+        'part_number',
+        'quantity',
+        'uom',
+        'description',
+        'identifiers',
+        'regulatory_information',
+        'replenishment_data',
+        'manufacturer_id',
+        'supplier_id',
+        'lead_time_days',
+    ];
+
+    protected $casts = [
+        'identifiers' => IdentifierDTO::class,
+        'regulatory_information' => IdentifierDTO::class,
+        'quantity' => 'integer',
+        'replenishment_data' => ReplenishmentDataDTO::class,
+    ];
+
+    public function products(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'bills_of_material')
+            ->withPivot('quantity_required')
+            ->withTimestamps();
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+    public function manufacturer(): BelongsTo
+    {
+        return $this->belongsTo(Manufacturer::class);
+    }
+
+    public function getUnitCostAttribute()
+    {
+        return $this->replenishment_data->purchaseTerms[0]['cost_per_part'] ?? 0;
+    }
+
+    public function getIdentifierValue(string $type): ?string
+    {
+        return $this->identifiers->identifiers->firstWhere('type', $type)?->value;
+    }
+
+    public function getRegulatoryInformationValue(string $type): ?string
+    {
+        return $this->regulatory_information->identifiers->firstWhere('type', $type)?->value;
+    }
+}
+
+
+==== app\Models\Post.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\Filament\Resources\PostResource;
+use Awcodes\Curator\Models\Media;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
+
+class Post extends Model
+{
+    use HasFactory;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'title',
+        'slug',
+        'content',
+        'image_id',
+        'user_id',
+        'is_published',
+        'published_at',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'content' => 'array',
+        'is_published' => 'boolean',
+        'published_at' => 'datetime',
+    ];
+
+    /**
+     * Get the user that owns the post.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the featured image for the post.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function image()
+    {
+        return $this->belongsTo(Media::class);
+    }
+
+    /**
+     * Retrieve the post URL.
+     *
+     * @return string
+     */
+    public function getUrlAttribute()
+    {
+        return route('post.show', $this);
+    }
+
+    /**
+     * Retrieve the post edit URL.
+     *
+     * @return string
+     */
+    public function getEditUrlAttribute()
+    {
+        return PostResource::getUrl('edit', ['record' => $this]);
+    }
+
+    /**
+     * Retrieve the post content blocks as an object.
+     *
+     * @return object
+     */
+    public function getBlocksAttribute()
+    {
+        return json_decode(
+            collect($this->content ?? [])->toJson()
+        );
+    }
+
+    /**
+     * Retrieve the post excerpt.
+     *
+     * @return string
+     */
+    public function getExcerptAttribute()
+    {
+        $excerpt = collect($this->content)
+            ->where('type', 'markdown')
+            ->first() ?? [];
+
+        $excerpt = collect(
+            explode("\n", Arr::get($excerpt, 'data.content', ''))
+        )->first();
+
+        return Str::limit($excerpt, 160);
+    }
+
+    /**
+     * Retrieve the published posts.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopePublished($query)
+    {
+        return $query->where('is_published', true);
+    }
+
+    /**
+     * Retrieve the draft posts.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeDrafts($query)
+    {
+        return $query->where('is_published', false);
+    }
+}
+
+
+==== app\Models\Product.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\Concerns\HasDimensions;
+use App\DTOs\IdentifierDTO;
+use App\DTOs\ReplenishmentDataDTO;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
+class Product extends Model
+{
+    use HasDimensions, HasFactory;
+
+    protected $fillable = [
+        'name',
+        'description',
+        'identifiers',
+        'replenishment_data',
+        'weight_oz'
+    ];
+
+    protected $casts = [
+        'identifiers' => IdentifierDTO::class,
+        'replenishment_data' => ReplenishmentDataDTO::class,
+        'weight_oz' => 'decimal'
+    ];
+
+    public function parts(): BelongsToMany
+    {
+        return $this->belongsToMany(Part::class, 'bills_of_material')
+            ->withPivot('quantity_required')
+            ->withTimestamps();
+    }
+
+    public function billOfMaterials(): HasMany
+    {
+        return $this->hasMany(BillOfMaterial::class);
+    }
+
+    public function gtin(): HasOne
+    {
+        return $this->hasOne(Gtin::class);
+    }
+
+    public function getMasterSku(): ?string
+    {
+        return $this->getIdentifierValue('master_sku');
+    }
+
+    public function getIdentifierValue(string $type): ?string
+    {
+        return $this->identifiers->identifiers->firstWhere('type', $type)?->value;
+    }
+
+    public function getDisplayName(): string
+    {
+        return $this->getMasterSku() ?? $this->name ?? '';
+    }
+}
+
+
+==== app\Models\PurchaseOrder.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\DTOs\AddressDTO;
+use App\Enums\PurchaseOrderStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class PurchaseOrder extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $fillable = [
+        'number',
+        'supplier_id',
+        'location_id',
+        'status',
+        'total_cost',
+        'user_id',
+        'opened_at',
+        'closed_at',
+        'bill_to_address_index',
+        'ship_from_address_index',
+        'ship_to_address_index',
+    ];
+
+    protected $casts = [
+        'status' => PurchaseOrderStatus::class,
+        'total_cost' => 'decimal:2',
+        'opened_at' => 'datetime',
+        'closed_at' => 'datetime',
+        'bill_to_address_index' => 'integer',
+        'ship_from_address_index' => 'integer',
+        'ship_to_address_index' => 'integer',
+    ];
+
+    protected $appends = ['bill_to_address', 'ship_from_address', 'ship_to_address'];
+
+    protected static function booted()
+    {
+        static::creating(function ($purchaseOrder) {
+            if (!$purchaseOrder->number) {
+                $purchaseOrder->number = static::getPurchaseOrderNumber();
+            }
+        });
+
+        static::saving(function ($purchaseOrder) {
+            $purchaseOrder->updateTotalCost();
+        });
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
+    }
+
+    public function purchaseOrderParts(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderPart::class);
+    }
+
+    public function getBillToAddressAttribute(): ?AddressDTO
+    {
+        return $this->supplier->addresses->billTo[$this->bill_to_address_index] ?? null;
+    }
+
+    public function getShipFromAddressAttribute(): ?AddressDTO
+    {
+        return $this->supplier->addresses->shipFrom[$this->ship_from_address_index] ?? null;
+    }
+
+    public function getShipToAddressAttribute(): ?AddressDTO
+    {
+        return $this->location->addresses->shipTo[$this->ship_to_address_index] ?? null;
+    }
+
+    public function setStatus(PurchaseOrderStatus $status): self
+    {
+        $this->status = $status;
+        return $this;
+    }
+
+    public function calculateTotalCost(): float
+    {
+        return $this->purchaseOrderParts->sum('total_cost');
+    }
+
+    public function updateTotalCost(): void
+    {
+        $this->total_cost = $this->calculateTotalCost();
+    }
+
+    public static function getPurchaseOrderNumber(): int
+    {
+        $lastPO = static::orderBy('number', 'desc')->first();
+
+        if ($lastPO) {
+            $newNumber = $lastPO->number + 1;
+        } else {
+            $newNumber = 1;
+        }
+
+        return $newNumber;
+    }
+
+    public function isEditable(): bool
+    {
+        return in_array($this->status, [
+            PurchaseOrderStatus::DRAFT,
+            PurchaseOrderStatus::SUBMITTED,
+        ]);
+    }
+}
+
+
+==== app\Models\PurchaseOrderPart.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\Enums\PurchaseOrderStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class PurchaseOrderPart extends Model
+{
+    use HasFactory;
+    protected $table = 'purchase_order_parts';
+    protected $fillable = [
+        'purchase_order_id',
+        'part_id',
+        'quantity_ordered',
+        'unit_cost',
+        'total_cost',
+        'quantity_invoiced',
+        'quantity_received',
+        'notes',
+    ];
+
+    protected $casts = [
+        'quantity_ordered' => 'integer',
+        'unit_cost' => 'decimal:2',
+        'total_cost' => 'decimal:2',
+        'quantity_invoiced' => 'integer',
+        'quantity_received' => 'integer',
+    ];
+
+    protected static function booted()
+    {
+        static::saving(function ($purchaseOrderPart) {
+            $purchaseOrderPart->calculateTotalCost();
+        });
+
+        static::saved(function ($purchaseOrderPart) {
+            $purchaseOrderPart->purchaseOrder->updateTotalCost();
+        });
+    }
+
+    public function purchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function part(): BelongsTo
+    {
+        return $this->belongsTo(Part::class);
+    }
+
+    public function calculateTotalCost(): void
+    {
+        $this->total_cost = $this->quantity_ordered * $this->unit_cost;
+    }
+
+    public function getRemainingQuantityAttribute(): int
+    {
+        return $this->quantity_ordered - $this->quantity_received;
+    }
+
+    public function getStatusAttribute(): PurchaseOrderStatus
+    {
+        if ($this->quantity_received === 0) {
+            return PurchaseOrderStatus::SUBMITTED;
+        } elseif ($this->quantity_received < $this->quantity_ordered) {
+            return PurchaseOrderStatus::PARTIALLY_RECEIVED;
+        } else {
+            return PurchaseOrderStatus::FULLY_RECEIVED;
+        }
+    }
+
+    public function scopeSubmitted($query)
+    {
+        return $query->where('quantity_received', 0);
+    }
+
+    public function scopeReceived($query)
+    {
+        return $query->where('quantity_received', '>', 0);
+    }
+
+    public function scopeFullyReceived($query)
+    {
+        return $query->whereRaw('quantity_received = quantity_ordered');
+    }
+
+    public function scopePartiallyReceived($query)
+    {
+        return $query->whereRaw('quantity_received > 0 AND quantity_received < quantity_ordered');
+    }
+
+    protected static function newFactory()
+    {
+        return \Database\Factories\PurchaseOrderPartFactory::new();
+    }
+}
+
+
+==== app\Models\Supplier.php ====
+
+<?php
+
+namespace App\Models;
+
+use App\DTOs\AddressDTO;
+use App\DTOs\SupplierAddressesDTO;
+use App\DTOs\IdentifierDTO;
+use App\Models\PurchaseOrder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Supplier extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $fillable = [
+        'name',
+        'account_number',
+        'payment_terms',
+        'lead_time_days',
+        'free_shipping_threshold_usd',
+        'contact',
+        'addresses',
+        'identifiers',
+    ];
+
+    protected $casts = [
+        'lead_time_days' => 'integer',
+        'free_shipping_threshold_usd' => 'decimal:2',
+        'contact' => 'json',
+        'addresses' => SupplierAddressesDTO::class,
+        'identifiers' => IdentifierDTO::class,
+    ];
+
+    protected $appends = ['free_shipping'];
+
+    protected $with = ['parts', 'locations'];
+
+    public function getFreeShippingAttribute(): bool
+    {
+        return $this->free_shipping_threshold_usd !== null && $this->free_shipping_threshold_usd >= 0;
+    }
+
+    public function setFreeShippingThresholdUsdAttribute($value)
+    {
+        $this->attributes['free_shipping_threshold_usd'] = $value !== null ? max(0, $value) : null;
+    }
+
+    public function parts(): HasMany
+    {
+        return $this->hasMany(Part::class);
+    }
+
+    public function locations(): HasMany
+    {
+        return $this->hasMany(Location::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    // Helper functions for addresses
+
+    /**
+     * @return array
+     */
+    public function getBillToAddresses(): array
+    {
+        return $this->addresses->billTo?->toArray() ?? [];
+    }
+
+    /**
+     * @return array
+     */
+    public function getShipFromAddresses(): array
+    {
+        return $this->addresses->shipFrom?->toArray() ?? [];
+    }
+
+    /**
+     * @return array
+     */
+    public function getShipToAddresses(): array
+    {
+        return $this->addresses->shipTo?->toArray() ?? [];
+    }
+
+    /**
+     * @return array
+     */
+    public function getReturnToAddresses(): array
+    {
+        return $this->addresses->returnTo?->toArray() ?? [];
+    }
+
+    public function getBillToAddress(int $index = 0): ?array
+    {
+        $addresses = $this->getBillToAddresses();
+        return $addresses[$index] ?? null;
+    }
+
+    public function getShipFromAddress(int $index = 0): ?array
+    {
+        $addresses = $this->getShipFromAddresses();
+        return $addresses[$index] ?? null;
+    }
+
+    public function getShipToAddress(int $index = 0): ?array
+    {
+        $addresses = $this->getShipToAddresses();
+        return $addresses[$index] ?? null;
+    }
+
+    public function getReturnToAddress(int $index = 0): ?array
+    {
+        $addresses = $this->getReturnToAddresses();
+        return $addresses[$index] ?? null;
+    }
+}
+
+
+==== app\Models\User.php ====
+
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+
+class User extends Authenticatable
+{
+    use HasFactory;
+    use Notifiable;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+    ];
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var array<int, string>
+     */
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+}
+
+
+==== app\Orion\Transformers\AddressDTOTransformer.php ====
+
+<?php
+
+namespace App\Orion\Transformers;
+
+use App\DTOs\AddressDTO;
+use Orion\Http\Resources\Resource;
+
+class AddressDTOTransformer extends Resource
+{
+    public function toArray($request)
+    {
+        /** @var AddressDTO $address */
+        $address = $this->resource;
+
+        return [
+            'address1' => $address->address1,
+            'address2' => $address->address2,
+            'city' => $address->city,
+            'state_prov_code' => $address->state_prov_code,
+            'zip' => $address->zip,
+            'phone_number' => $address->phone_number,
+            'email_address' => $address->email_address,
+        ];
+    }
+}

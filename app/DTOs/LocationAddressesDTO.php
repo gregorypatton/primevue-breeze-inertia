@@ -23,12 +23,16 @@ class LocationAddressesDTO extends Data
         public ?DataCollection $other = null
     ) {}
 
-    public static function fromArray(array $data): self
+    public static function fromArray(array|string $data): self
     {
+        if (is_string($data)) {
+            $data = json_decode($data, true);
+        }
+
         return new self(
-            billTo: isset($data['bill_to']) ? AddressDTO::collection($data['bill_to']) : null,
-            shipFrom: isset($data['ship_from']) ? AddressDTO::collection($data['ship_from']) : null,
-            shipTo: isset($data['ship_to']) ? AddressDTO::collection($data['ship_to']) : null,
+            billTo: isset($data['billTo']) ? AddressDTO::collection($data['billTo']) : null,
+            shipFrom: isset($data['shipFrom']) ? AddressDTO::collection($data['shipFrom']) : null,
+            shipTo: isset($data['shipTo']) ? AddressDTO::collection($data['shipTo']) : null,
             other: isset($data['other']) ? AddressDTO::collection($data['other']) : null
         );
     }
@@ -36,9 +40,9 @@ class LocationAddressesDTO extends Data
     public function toArray(): array
     {
         return [
-            'bill_to' => $this->billTo?->toArray(),
-            'ship_from' => $this->shipFrom?->toArray(),
-            'ship_to' => $this->shipTo?->toArray(),
+            'billTo' => $this->billTo?->toArray(),
+            'shipFrom' => $this->shipFrom?->toArray(),
+            'shipTo' => $this->shipTo?->toArray(),
             'other' => $this->other?->toArray(),
         ];
     }

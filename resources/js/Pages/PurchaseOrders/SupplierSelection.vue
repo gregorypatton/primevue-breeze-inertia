@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { Supplier } from '@/Models/Supplier';
+import { Supplier } from '../../Models/Supplier';
 import Dropdown from 'primevue/dropdown';
 import Card from 'primevue/card';
 
@@ -47,7 +47,11 @@ const shipFromAddress = computed(() => {
 
 const onSupplierChange = () => {
     if (selectedSupplier.value) {
-        emit('supplier-selected', selectedSupplier.value.$getKey());
+        emit('supplier-selected', {
+            id: selectedSupplier.value.$getKey(),
+            shipFromAddressIndex: 0, // Assuming we're always using the first address
+            supplier: selectedSupplier.value
+        });
     }
 };
 

@@ -1,14 +1,15 @@
 <script setup>
-import { ref, useTemplateRef, onMounted, onUnmounted, watchEffect } from 'vue';
+import { ref, computed } from 'vue';
+import { Link, usePage } from '@inertiajs/vue3';
 import { useForm } from '@inertiajs/vue3';
-import Drawer from 'primevue/drawer';
 import Toast from 'primevue/toast';
+import Button from 'primevue/button';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Container from '@/Components/Container.vue';
 import LinksMenu from '@/Components/LinksMenu.vue';
 import LinksMenuBar from '@/Components/LinksMenuBar.vue';
-import LinksPanelMenu from '@/Components/LinksPanelMenu.vue';
 import ToggleThemeButton from '@/Components/ToggleThemeButton.vue';
+import MainMenu from '@/Components/MainMenu.vue';
 
 const currentRoute = route().current();
 const logoutForm = useForm({});
@@ -16,17 +17,41 @@ function logout() {
     logoutForm.post(route('logout'));
 }
 
-// Main menu
-const mainMenuItems = [
+const menuItems = [
     {
         label: 'Dashboard',
-        route: route('dashboard'),
-        active: currentRoute == 'dashboard',
+        items: [
+            { label: 'Dashboard', icon: 'pi pi-home', route: 'dashboard' }
+        ]
     },
+    {
+        label: 'Purchasing',
+        items: [
+            { label: 'Create Purchase Order', icon: 'pi pi-plus', route: 'purchase-orders.create' },
+            { label: 'Receive Purchase Order', icon: 'pi pi-inbox', route: 'purchase-orders.receive' },
+            { label: 'View Purchase Orders', icon: 'pi pi-list', route: 'purchase-orders.index' }
+        ]
+    },
+    {
+        label: 'Production',
+        items: [
+            { label: 'Create Work Order', icon: 'pi pi-plus', route: 'work-orders.create' },
+            { label: 'Modify Work Order', icon: 'pi pi-pencil', route: 'work-orders.modify' }
+        ]
+    }
 ];
 
+// Top-level menu items for the top bar
+const topMenuItems = computed(() =>
+    menuItems.map(item => ({
+        label: item.label,
+        route: item.items[0].route,
+        active: currentRoute.startsWith(item.label.toLowerCase()),
+    }))
+);
+
 // User menu (desktop)
-const userMenu = useTemplateRef('user-menu');
+const userMenu = ref(null);
 const userMenuItems = [
     {
         label: 'Profile',
@@ -42,40 +67,14 @@ const userMenuItems = [
     },
 ];
 const toggleUserMenu = (event) => {
-    userMenu.value.childRef.toggle(event);
+    userMenu.value.toggle(event);
 };
 
-// Mobile menu (Drawer)
-const homeMobileMenuItems = ref([
-    {
-        label: 'Welcome',
-        icon: 'pi pi-home',
-        route: route('welcome'),
-        active: currentRoute == 'welcome',
-    },
-    {
-        label: 'Dashboard',
-        icon: 'pi pi-th-large',
-        route: route('dashboard'),
-        active: currentRoute == 'dashboard',
-    },
-]);
-const mobileMenuOpen = ref(false);
-const windowWidth = ref(window.innerWidth);
-const updateWidth = () => {
-    windowWidth.value = window.innerWidth;
+// Main menu state
+const mainMenuOpen = ref(false);
+const toggleMainMenu = () => {
+    mainMenuOpen.value = !mainMenuOpen.value;
 };
-onMounted(() => {
-    window.addEventListener('resize', updateWidth);
-});
-onUnmounted(() => {
-    window.removeEventListener('resize', updateWidth);
-});
-watchEffect(() => {
-    if (windowWidth.value > 768) {
-        mobileMenuOpen.value = false;
-    }
-});
 </script>
 
 <template>
@@ -92,7 +91,7 @@ watchEffect(() => {
                 <!-- Primary Navigation Menu -->
                 <Container>
                     <LinksMenuBar
-                        :model="mainMenuItems"
+                        :model="topMenuItems"
                         :pt="{
                             root: {
                                 class: 'px-0 py-3 border-0 rounded-none',
@@ -105,15 +104,22 @@ watchEffect(() => {
                         <template #start>
                             <!-- Logo -->
                             <div class="shrink-0 flex items-center mr-5">
-                                <Link :href="route('welcome')">
+                                <Link :href="route('dashboard')">
                                     <ApplicationLogo
                                         class="block h-10 w-auto fill-current text-surface-900 dark:text-surface-0"
                                     />
                                 </Link>
                             </div>
+
+                            <!-- Main Menu Toggle Button -->
+                            <Button
+                                icon="pi pi-bars"
+                                @click="toggleMainMenu"
+                                class="p-button-text"
+                            />
                         </template>
                         <template #end>
-                            <div class="hidden md:flex md:items-center md:ms-6">
+                            <div class="flex items-center md:ms-6">
                                 <ToggleThemeButton
                                     text
                                     severity="secondary"
@@ -124,7 +130,7 @@ watchEffect(() => {
                                     <LinksMenu
                                         :model="userMenuItems"
                                         popup
-                                        ref="user-menu"
+                                        ref="userMenu"
                                         class="shadow"
                                     />
                                     <Button
@@ -140,69 +146,13 @@ watchEffect(() => {
                                     </Button>
                                 </div>
                             </div>
-
-                            <!-- Hamburger -->
-                            <div class="flex items-center md:hidden">
-                                <div class="relative">
-                                    <Button
-                                        text
-                                        rounded
-                                        severity="secondary"
-                                        icon="pi pi-bars"
-                                        @click="mobileMenuOpen = true"
-                                    />
-                                </div>
-                            </div>
                         </template>
                     </LinksMenuBar>
                 </Container>
-
-                <!-- Mobile drawer menu -->
-                <Drawer v-model:visible="mobileMenuOpen" position="right">
-                    <template #header>
-                        <ToggleThemeButton text severity="secondary" rounded />
-                    </template>
-                    <div>
-                        <div>
-                            <div class="mb-5">
-                                <p
-                                    class="text-muted-color font-bold uppercase text-sm mb-2"
-                                >
-                                    Home
-                                </p>
-                                <LinksPanelMenu
-                                    :model="homeMobileMenuItems"
-                                    class="w-full"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <template #footer>
-                        <div class="flex items-center gap-2">
-                            <Link
-                                :href="route('profile.edit')"
-                                class="flex-auto"
-                            >
-                                <Button
-                                    label="Profile"
-                                    icon="pi pi-user"
-                                    class="w-full"
-                                    severity="secondary"
-                                    outlined
-                                ></Button>
-                            </Link>
-                            <Button
-                                label="Logout"
-                                icon="pi pi-sign-out"
-                                class="flex-auto"
-                                severity="danger"
-                                text
-                                @click="logout"
-                            ></Button>
-                        </div>
-                    </template>
-                </Drawer>
             </nav>
+
+            <!-- Main Menu -->
+            <MainMenu v-model:visible="mainMenuOpen" />
 
             <!-- Page Heading -->
             <header

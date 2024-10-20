@@ -23,6 +23,7 @@
     },
     "dependencies": {
         "@tailflow/laravel-orion": "^4.1.0",
+        "pinia": "^2.2.4",
         "vue-loader": "^17.4.2"
     }
 }
