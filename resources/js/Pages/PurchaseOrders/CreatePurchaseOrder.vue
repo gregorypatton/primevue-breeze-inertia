@@ -1,7 +1,9 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useForm } from '@inertiajs/vue3';
-import { usePurchaseOrderStore } from '@/Stores/purchaseOrderStore';
+import { useSupplierStore } from '@/Stores/supplierStore';
+import { usePartStore } from '@/Stores/partStore';
+import { useLocationStore } from '@/Stores/locationStore';
 import SupplierSelection from './SupplierSelection.vue';
 import PartSelector from './PartSelector.vue';
 import AddressDisplay from '@/Components/AddressDisplay.vue';
@@ -12,10 +14,11 @@ import Dialog from 'primevue/dialog';
 import PurchaseOrderPackingList from './PurchaseOrderPackingList.vue';
 import ProgressSpinner from 'primevue/progressspinner';
 
-const store = usePurchaseOrderStore();
+const supplierStore = useSupplierStore();
+const partStore = usePartStore();
+const locationStore = useLocationStore();
 const toast = useToast();
 
-const loading = ref(false);
 const showPackingList = ref(false);
 const debugInfo = ref('');
 
@@ -29,52 +32,37 @@ const form = useForm({
     ship_to_address_index: null
 });
 
-const onSupplierSelected = async (supplierData) => {
-    loading.value = true;
-    debugInfo.value += `Supplier selected: ${JSON.stringify(supplierData)}\n`;
-    try {
-        await store.setSupplier(supplierData);
-        debugInfo.value += `Supplier set in store\n`;
-    } catch (error) {
-        console.error('Error setting supplier:', error);
-        debugInfo.value += `Error setting supplier: ${error.message}\n`;
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load supplier data', life: 3000 });
-    } finally {
-        loading.value = false;
-    }
+const onSupplierSelected = async (supplier) => {
+    supplierStore.setCurrentSupplier(supplier);
+    await partStore.fetchPartsBySupplier(supplier.id);
 };
 
 const canCreatePurchaseOrder = computed(() => {
-    return store.supplier &&
-           store.selectedParts.length > 0 &&
-           store.billToLocation &&
-           store.shipToLocation &&
-           store.shipFromLocation;
+    return supplierStore.currentSupplier &&
+           partStore.parts.length > 0 &&
+           form.bill_to_location_id &&
+           form.ship_to_location_id &&
+           form.ship_from_address_index !== null;
 });
-
-const areSupplierPartsLoaded = computed(() => store.areSupplierPartsLoaded);
 
 const createPurchaseOrder = () => {
     if (!canCreatePurchaseOrder.value) {
         debugInfo.value += `Cannot create purchase order: ${JSON.stringify({
-            supplier: !!store.supplier,
-            selectedParts: store.selectedParts.length,
-            billToLocation: !!store.billToLocation,
-            shipToLocation: !!store.shipToLocation,
-            shipFromLocation: !!store.shipFromLocation
+            supplier: !!supplierStore.currentSupplier,
+            parts: partStore.parts.length,
+            billToLocation: !!form.bill_to_location_id,
+            shipToLocation: !!form.ship_to_location_id,
+            shipFromAddress: form.ship_from_address_index !== null
         })}\n`;
         return;
     }
 
-    form.supplier_id = store.supplier.id;
-    form.parts = store.selectedParts.map(part => ({
+    form.supplier_id = supplierStore.currentSupplier!.id;
+    form.parts = partStore.parts.map(part => ({
         id: part.id,
         quantity: part.quantity,
         unit_cost: part.unit_cost
     }));
-    form.bill_to_location_id = store.billToLocation.id;
-    form.ship_to_location_id = store.shipToLocation.id;
-    form.ship_from_address_index = store.shipFromAddressIndex;
 
     debugInfo.value += `Submitting purchase order: ${JSON.stringify(form)}\n`;
 
@@ -83,7 +71,6 @@ const createPurchaseOrder = () => {
         preserveScroll: true,
         onSuccess: () => {
             toast.add({ severity: 'success', summary: 'Success', detail: 'Purchase Order created successfully', life: 3000 });
-            store.reset();
             form.reset();
             debugInfo.value += `Purchase order created successfully\n`;
         },
@@ -103,18 +90,7 @@ const closePackingList = () => {
 };
 
 onMounted(async () => {
-    loading.value = true;
-    try {
-        debugInfo.value += `Fetching warehouse locations\n`;
-        await store.fetchWarehouseLocations();
-        debugInfo.value += `Warehouse locations fetched\n`;
-    } catch (error) {
-        console.error('Error fetching warehouse locations:', error);
-        debugInfo.value += `Error fetching warehouse locations: ${error.message}\n`;
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load warehouse locations', life: 3000 });
-    } finally {
-        loading.value = false;
-    }
+    await locationStore.fetchWarehouseLocations();
 });
 </script>
 
@@ -122,14 +98,14 @@ onMounted(async () => {
     <div>
         <SupplierSelection @supplier-selected="onSupplierSelected" />
 
-        <div v-if="store.supplier" class="bg-surface-0 dark:bg-surface-950 px-6 py-8 md:px-12 lg:px-20 mt-4">
+        <div v-if="supplierStore.currentSupplier" class="bg-surface-0 dark:bg-surface-950 px-6 py-8 md:px-12 lg:px-20 mt-4">
             <div class="flex items-start flex-col lg:justify-between lg:flex-row">
                 <div>
                     <div class="font-medium text-3xl text-surface-900 dark:text-surface-0">Supplier Parts</div>
                     <div class="flex items-center text-surface-700 dark:text-surface-100 flex-wrap">
                         <div class="mr-8 flex items-center mt-4">
                             <i class="pi pi-box mr-2" />
-                            <span>{{ store.supplierParts.length }} Associated Parts</span>
+                            <span>{{ partStore.parts.length }} Associated Parts</span>
                         </div>
                     </div>
                 </div>
@@ -139,35 +115,30 @@ onMounted(async () => {
         <div class="grid grid-cols-2 gap-4 mt-4">
             <AddressDisplay
                 title="Ship From Address"
-                :address="store.shipFromLocation"
-                :loading="loading"
+                :address="supplierStore.currentSupplier?.addresses?.shipping[form.ship_from_address_index]"
+                :loading="supplierStore.loading"
             />
             <AddressDisplay
                 title="Ship To Address"
-                :address="store.shipToLocation"
-                :loading="loading"
+                :address="locationStore.locations.find(l => l.id === form.ship_to_location_id)?.address"
+                :loading="locationStore.loading"
             />
             <AddressDisplay
                 title="Bill To Address"
-                :address="store.billToLocation"
-                :loading="loading"
-            />
-            <AddressDisplay
-                title="Return To Address"
-                :address="store.returnToLocation"
-                :loading="loading"
+                :address="locationStore.locations.find(l => l.id === form.bill_to_location_id)?.address"
+                :loading="locationStore.loading"
             />
         </div>
 
-        <div v-if="store.isLoadingParts" class="flex justify-center items-center mt-4">
+        <div v-if="partStore.loading" class="flex justify-center items-center mt-4">
             <ProgressSpinner />
             <span class="ml-2">Loading parts...</span>
         </div>
 
-        <PartSelector v-else-if="areSupplierPartsLoaded" />
+        <PartSelector v-else-if="partStore.parts.length > 0" :parts="partStore.parts" />
 
-        <div v-else-if="store.supplier" class="mt-4 p-4 bg-yellow-100 text-yellow-700 rounded">
-            No parts found for this supplier.
+        <div v-else-if="supplierStore.currentSupplier" class="mt-4 p-4 bg-yellow-100 text-yellow-700 rounded">
+            {{ partStore.error || 'No parts found for this supplier.' }}
         </div>
 
         <div class="mt-4 flex justify-between">
@@ -186,11 +157,6 @@ onMounted(async () => {
         <div v-if="debugInfo" class="mt-4 p-4 bg-gray-100 rounded">
             <h4 class="font-bold mb-2">Debug Information:</h4>
             <pre class="whitespace-pre-wrap">{{ debugInfo }}</pre>
-        </div>
-
-        <div v-if="store.debugLog" class="mt-4 p-4 bg-gray-100 rounded">
-            <h4 class="font-bold mb-2">Store Debug Log:</h4>
-            <pre class="whitespace-pre-wrap">{{ store.debugLog }}</pre>
         </div>
     </div>
     <Toast />

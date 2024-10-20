@@ -4,20 +4,35 @@ import { HasMany } from "@tailflow/laravel-orion/lib/drivers/default/relations/h
 import { Supplier } from "./Supplier";
 import { PurchaseOrderPart } from "./PurchaseOrderPart";
 
-export class Part extends Model<{
+export class OrionPurchaseOrder extends Model<{
     id: number,
-    part_number: string,
-    description: string,
-    unit_cost: number,
+    purchase_order_number: string,
+    status: string,
     supplier_id: number,
-    replenishment_data: {
-        purchaseTerms: Array<{
-            cost_per_part: number
-        }>
+    total_cost: number,
+    bill_to_address: {
+        street1: string,
+        street2: string,
+        city: string,
+        state: string,
+        postal_code: string,
+        country: string
     },
-    options: {
-        visible: boolean,
-        key: string
+    ship_from_address: {
+        street1: string,
+        street2: string,
+        city: string,
+        state: string,
+        postal_code: string,
+        country: string
+    },
+    ship_to_address: {
+        street1: string,
+        street2: string,
+        city: string,
+        state: string,
+        postal_code: string,
+        country: string
     }
 }, {
     created_at: string,
@@ -28,7 +43,7 @@ export class Part extends Model<{
     purchaseOrderParts: Array<PurchaseOrderPart>
 }> {
     public $resource(): string {
-        return 'parts';
+        return 'purchase-orders';
     }
 
     public supplier(): BelongsTo<Supplier> {

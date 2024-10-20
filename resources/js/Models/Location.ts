@@ -1,24 +1,55 @@
-import { Model } from "@tailflow/laravel-orion/lib/model";
+import { Model } from './Model';
+import { Supplier } from './Supplier';
+import { Inventory } from './Inventory';
+import { PurchaseOrder } from './PurchaseOrder';
+import { AddressDTO } from '../Interfaces/AddressDTO';
 
-export class Location extends Model<{
-    name: string;
-    type: string;
-    virtual_type: string | null;
-    addresses: App.DTOs.LocationAddressesDTO;
-    parent_id: number | null;
-    supplier_id: number | null;
-}, {
-    id: number;
-    created_at: string;
-    updated_at: string;
-    deleted_at: string | null;
-}>
-{
-    public $resource(): string {
-        return 'locations';
-    }
+export class Location extends Model {
+  declare id: number;
+  declare name: string;
+  declare type: string;
+  declare parent_id: number | null;
+  declare supplier_id: number | null;
+  declare address: AddressDTO | null;
 
-    static $query(): any {
-        return super.$query();
-    }
+  // Relationships
+  declare parent?: Location;
+  declare children?: Location[];
+  declare supplier?: Supplier;
+  declare inventory?: Inventory[];
+  declare purchaseOrders?: PurchaseOrder[];
+  declare billToPurchaseOrders?: PurchaseOrder[];
+  declare supplierPurchaseOrders?: PurchaseOrder[];
+  declare shipFromPurchaseOrders?: PurchaseOrder[];
+
+  // Methods
+  static getValidTypes(): string[] {
+    return ['warehouse', 'store', 'supplier', 'customer'];
+  }
+
+  static getValidVirtualTypes(): string[] {
+    return ['supplier', 'customer'];
+  }
+
+  validateHierarchy(): boolean {
+    // Implement validation logic here
+    return true;
+  }
+
+  // Implement Orion-specific query methods
+  static includes(): string[] {
+    return ['parent', 'children', 'supplier', 'inventory', 'purchaseOrders'];
+  }
+
+  static filterableBy(): string[] {
+    return ['id', 'name', 'type', 'parent_id', 'supplier_id'];
+  }
+
+  static sortableBy(): string[] {
+    return ['id', 'name', 'type', 'parent_id', 'supplier_id'];
+  }
+
+  static searchableBy(): string[] {
+    return ['name'];
+  }
 }

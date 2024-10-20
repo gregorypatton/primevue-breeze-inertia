@@ -18,10 +18,6 @@ class PurchaseOrderController extends Controller
         return Inertia::render('PurchaseOrders/Create');
     }
 
-    public function store(Request $request)
-    {
-        // Store purchase order logic here
-    }
 
     public function receive()
     {

@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Models\Part;
 use Orion\Http\Controllers\Controller;
 use Orion\Concerns\DisableAuthorization;
-use Illuminate\Http\Request;
+use Orion\Http\Requests\Request;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
 
 class PartController extends Controller
 {
@@ -38,22 +40,25 @@ class PartController extends Controller
         return 'id';
     }
 
-    protected function paginationLimit(): int
+    protected function buildIndexFetchQuery(Request $request, array $requestedRelations): Builder
     {
-        return 50; // Adjust this value based on your needs
-    }
-
-    public function index(Request $request)
-    {
-        $query = $this->buildIndexFetchQuery($request);
+        $query = parent::buildIndexFetchQuery($request, $requestedRelations);
 
         $supplierIdFilter = $request->input('filter.supplier_id');
         if ($supplierIdFilter) {
             $query->where('supplier_id', $supplierIdFilter);
         }
 
-        $parts = $query->paginate($this->paginationLimit());
+        return $query;
+    }
 
-        return $this->response($parts);
+    public function index(Request $request)
+    {
+        try {
+            return parent::index($request);
+        } catch (\Exception $e) {
+            Log::error('Error in PartController@index: ' . $e->getMessage());
+            return response()->json(['error' => 'An error occurred while fetching parts.'], 500);
+        }
     }
 }

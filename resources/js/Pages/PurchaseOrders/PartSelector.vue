@@ -33,6 +33,9 @@
                 </template>
             </Column>
         </DataTable>
+        <div v-if="store.currentPage < store.totalPages" class="mt-4 text-center">
+            <Button label="Load More" @click="loadMoreParts" :loading="store.isLoadingParts" />
+        </div>
         <div class="mt-4 text-right">
             <h4 class="text-lg font-semibold">Total Order Cost: {{ formatCurrency(store.total) }}</h4>
         </div>
@@ -50,6 +53,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import InputNumber from 'primevue/inputnumber';
 import InputText from 'primevue/inputtext';
+import Button from 'primevue/button';
 
 const store = usePurchaseOrderStore();
 
@@ -95,6 +99,10 @@ const onRowUnselect = (event) => {
 
 const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+};
+
+const loadMoreParts = async () => {
+    await store.loadMoreParts();
 };
 
 onMounted(() => {

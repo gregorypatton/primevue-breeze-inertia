@@ -62,9 +62,9 @@ export const usePurchaseOrderStore = defineStore('purchaseOrder', {
       this.isLoadingParts = true;
       try {
         this.log(`Fetching parts for supplier ID: ${this.supplier.id}, page: ${page}`);
-        const response = await Part.$query()
-          .filter('supplier_id', '=', this.supplier.id)
-          .paginate(page, 50);  // 50 is the pagination limit we set in the controller
+        const response = await Supplier.$relation('parts')
+          .for(this.supplier.id)
+          .paginate(page, 50);
 
         this.log(`Supplier parts response: ${JSON.stringify(response)}`);
 
@@ -78,8 +78,8 @@ export const usePurchaseOrderStore = defineStore('purchaseOrder', {
               total_cost: 0,
             }))];
           }
-          this.currentPage = response.current_page;
-          this.totalPages = response.last_page;
+          this.currentPage = response.meta.current_page;
+          this.totalPages = response.meta.last_page;
         } else {
           this.log('No parts found for this supplier');
           if (page === 1) {

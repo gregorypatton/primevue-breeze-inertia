@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Location;
 use Orion\Http\Controllers\Controller;
 use Orion\Concerns\DisableAuthorization;
+use Orion\Http\Requests\Request;
 
 class LocationController extends Controller
 {
@@ -30,5 +31,10 @@ class LocationController extends Controller
     public function searchableBy(): array
     {
         return ['name'];
+    }
+
+    public function index(Request $request)
+    {
+        return parent::index($request);
     }
 }
