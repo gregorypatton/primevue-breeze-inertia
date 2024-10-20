@@ -9,9 +9,15 @@ use Spatie\LaravelData\DataCollection;
 class AddressDTO extends Data
 {
     public function __construct(
+        public ?string $street1 = null,
+        public ?string $street2 = null,
+        public ?string $city = null,
+        public ?string $state = null,
+        public ?string $postal_code = null,
+        public ?string $country = null,
+        public ?string $type = null,
         public ?string $address1 = null,
         public ?string $address2 = null,
-        public ?string $city = null,
         public ?string $state_prov_code = null,
         public ?string $zip = null,
         public ?string $phone_number = null,

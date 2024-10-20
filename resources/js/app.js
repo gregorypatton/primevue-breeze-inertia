@@ -15,10 +15,13 @@ import ToastService from 'primevue/toastservice';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Core from 'primevue/config'
+import IftaLabel from 'primevue/iftalabel';
+import FileUpload from 'primevue/fileupload'
+import Steps from 'primevue/steps'
+
 
 import { useTheme } from './Composables/useTheme.js';
 import customThemePreset from './theme-preset.js';
-
 // Import Orion SDK
 import { Orion } from "@tailflow/laravel-orion/lib/orion";
 
@@ -57,6 +60,8 @@ createInertiaApp({
             .component('Head', Head)
             .component('Link', Link)
             .component('InputText', InputText)
+            .component('IftaLabel', IftaLabel)
+            .component('Core', Core)
             .mount(el);
     },
     progress: {

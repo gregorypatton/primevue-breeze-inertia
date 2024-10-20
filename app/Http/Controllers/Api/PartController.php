@@ -8,12 +8,17 @@ use Orion\Concerns\DisableAuthorization;
 use Orion\Http\Requests\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
+use App\Orion\Transformers\ReplenishmentDataDTOTransformer;
 
 class PartController extends Controller
 {
     protected $model = Part::class;
 
     use DisableAuthorization;
+
+    protected $casts = [
+        'replenishment_data' => ReplenishmentDataDTOTransformer::class,
+    ];
 
     public function includes(): array
     {

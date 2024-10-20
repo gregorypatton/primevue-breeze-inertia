@@ -1,37 +1,80 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
 import { Supplier } from '@/Models/Supplier';
+import api from '../api';
 
-export const useSupplierStore = defineStore('supplier', () => {
-  const suppliers = ref<Supplier[]>([]);
-  const currentSupplier = ref<Supplier | null>(null);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
-
-  async function fetchSuppliers() {
-    loading.value = true;
-    error.value = null;
-    try {
-      const response = await Supplier.$query().get();
-      suppliers.value = response as Supplier[];
-    } catch (err) {
-      console.error('Failed to fetch suppliers:', err);
-      error.value = 'Failed to fetch suppliers';
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  function setCurrentSupplier(supplier: Supplier) {
-    currentSupplier.value = supplier;
-  }
-
-  return {
-    suppliers,
-    currentSupplier,
-    loading,
-    error,
-    fetchSuppliers,
-    setCurrentSupplier,
-  };
+export const useSupplierStore = defineStore('supplier', {
+  state: () => ({
+    suppliers: [] as Supplier[],
+    loading: false,
+    error: null as string | null,
+  }),
+  getters: {
+    getSuppliers: (state) => state.suppliers,
+    getLoading: (state) => state.loading,
+    getError: (state) => state.error,
+  },
+  actions: {
+    async fetchSuppliers() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.get('/suppliers');
+        this.suppliers = response.data.data.map((item: any) => new Supplier(item));
+      } catch (error: any) {
+        console.error('Error fetching suppliers:', error);
+        this.error = error.message || 'An error occurred while fetching suppliers';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async createSupplier(supplierData: Partial<Supplier>) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.post('/suppliers', supplierData);
+        const newSupplier = new Supplier(response.data.data);
+        this.suppliers.push(newSupplier);
+        return newSupplier;
+      } catch (error: any) {
+        console.error('Error creating supplier:', error);
+        this.error = error.message || 'An error occurred while creating the supplier';
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async updateSupplier(supplierId: number, supplierData: Partial<Supplier>) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.put(`/suppliers/${supplierId}`, supplierData);
+        const updatedSupplier = new Supplier(response.data.data);
+        const index = this.suppliers.findIndex(s => s.id === supplierId);
+        if (index !== -1) {
+          this.suppliers[index] = updatedSupplier;
+        }
+        return updatedSupplier;
+      } catch (error: any) {
+        console.error('Error updating supplier:', error);
+        this.error = error.message || 'An error occurred while updating the supplier';
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async deleteSupplier(supplierId: number) {
+      this.loading = true;
+      this.error = null;
+      try {
+        await api.delete(`/suppliers/${supplierId}`);
+        this.suppliers = this.suppliers.filter(s => s.id !== supplierId);
+      } catch (error: any) {
+        console.error('Error deleting supplier:', error);
+        this.error = error.message || 'An error occurred while deleting the supplier';
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+  },
 });
