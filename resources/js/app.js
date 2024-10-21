@@ -18,7 +18,8 @@ import Core from 'primevue/config'
 import IftaLabel from 'primevue/iftalabel';
 import FileUpload from 'primevue/fileupload'
 import Steps from 'primevue/steps'
-
+import Card from 'primevue/card';
+import OrderList from 'primevue/orderlist'; // Add this line
 
 import { useTheme } from './Composables/useTheme.js';
 import customThemePreset from './theme-preset.js';
@@ -56,6 +57,8 @@ createInertiaApp({
             .component('FileUpload', FileUpload)
             .component('Steps', Steps)
             .component('Button', Button)
+            .component('Card', Card)
+            .component('OrderList', OrderList) // Add this line
             .use(ToastService)
             .component('Head', Head)
             .component('Link', Link)

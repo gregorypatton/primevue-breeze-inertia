@@ -51,6 +51,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->name('purchase-orders.store');
     Route::get('/purchase-orders/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
 
+    // New route for PurchaseOrderBuilder
+    Route::get('/purchase-order-builder', function () {
+        return Inertia::render('PurchaseOrderBuilder/PurchaseOrderBuilder');
+    })->name('purchase-order-builder');
+
     // Work Order routes
     Route::get('/work-orders/create', [WorkOrderController::class, 'create'])->name('work-orders.create');
     Route::get('/work-orders/modify', [WorkOrderController::class, 'modify'])->name('work-orders.modify');

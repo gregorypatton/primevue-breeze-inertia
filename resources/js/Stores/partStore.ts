@@ -1,3 +1,4 @@
+// partStore.ts
 import { defineStore } from 'pinia';
 import { Part } from '@/Models/Part';
 import api from '../api';
@@ -14,21 +15,24 @@ export const usePartStore = defineStore('part', {
     getError: (state) => state.error,
   },
   actions: {
-    async fetchPartsBySupplier(supplierId: number) {
-      this.loading = true;
-      this.error = null;
-      try {
-        const response = await api.get(`/parts`, {
-          params: { filter: { supplier_id: supplierId } }
-        });
-        this.parts = response.data.data.map((item: any) => new Part(item));
-      } catch (error: any) {
-        console.error('Error fetching parts:', error);
-        this.error = error.message || 'An error occurred while fetching parts';
-      } finally {
-        this.loading = false;
-      }
-    },
+
+      async fetchPartsBySupplier(supplierId: number) {
+          this.loading = true;
+          this.error = null;
+          try {
+              const response = await api.get(`/parts`, {
+                  params: { 'filter[supplier_id]': supplierId },
+              });
+              this.parts = response.data.data.map((item: any) => new Part(item));
+              console.log('Fetched parts:', this.parts);
+          } catch (error: any) {
+              console.error('Error fetching parts:', error);
+              this.error = error.message || 'An error occurred while fetching parts';
+          } finally {
+              this.loading = false;
+          }
+      },
+
     async fetchParts() {
       this.loading = true;
       this.error = null;
@@ -64,7 +68,7 @@ export const usePartStore = defineStore('part', {
       try {
         const response = await api.put(`/parts/${partId}`, partData);
         const updatedPart = new Part(response.data.data);
-        const index = this.parts.findIndex(p => p.id === partId);
+        const index = this.parts.findIndex(p => p.$attributes.id === partId);
         if (index !== -1) {
           this.parts[index] = updatedPart;
         }
@@ -82,7 +86,7 @@ export const usePartStore = defineStore('part', {
       this.error = null;
       try {
         await api.delete(`/parts/${partId}`);
-        this.parts = this.parts.filter(p => p.id !== partId);
+        this.parts = this.parts.filter(p => p.$attributes.id !== partId);
       } catch (error: any) {
         console.error('Error deleting part:', error);
         this.error = error.message || 'An error occurred while deleting the part';

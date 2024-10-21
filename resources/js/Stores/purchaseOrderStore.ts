@@ -1,139 +1,117 @@
 import { defineStore } from 'pinia';
-import { PurchaseOrder } from '../Models/PurchaseOrder';
-import { PurchaseOrderPart } from '../Models/PurchaseOrderPart';
+import { ref, computed } from 'vue';
 import { Supplier } from '../Models/Supplier';
-import { Location } from '../Models/Location';
-import { AddressDTO } from '../Interfaces/AddressDTO';
 import { Part } from '../Models/Part';
-import api from '../api';
+import customHttpClient from '../utils/customHttpClient';
 
-export const usePurchaseOrderStore = defineStore('purchaseOrder', {
-  state: () => ({
-    purchaseOrder: null as PurchaseOrder | null,
-    purchaseOrderParts: [] as PurchaseOrderPart[],
-    supplier: null as Supplier | null,
-    locations: {
-      billTo: null as Location | null,
-      shipFrom: null as Location | null,
-      shipTo: null as Location | null,
-    },
-    addresses: {
-      billTo: null as AddressDTO | null,
-      shipFrom: null as AddressDTO | null,
-      shipTo: null as AddressDTO | null,
-    },
-    loading: false,
-    error: null as string | null,
-  }),
+interface OrionResponse<T> {
+  data: T[];
+}
 
-  getters: {
-    subtotal: (state) => {
-      return state.purchaseOrderParts.reduce((total, part) => total + (part.$attributes.total_cost || 0), 0);
-    },
-    taxAmount: (state) => {
-      // Assuming a fixed tax rate of 10% for this example
-      const taxRate = 0.1;
-      return state.purchaseOrderParts.reduce((total, part) => total + (part.$attributes.total_cost || 0), 0) * taxRate;
-    },
-    total: (state) => {
-      const subtotal = state.purchaseOrderParts.reduce((total, part) => total + (part.$attributes.total_cost || 0), 0);
-      const taxRate = 0.1;
-      return subtotal + (subtotal * taxRate);
-    },
-  },
+export const usePurchaseOrderStore = defineStore('purchaseOrder', () => {
+  const suppliers = ref<Supplier[]>([]);
+  const selectedSupplier = ref<Supplier | null>(null);
+  const parts = ref<Part[]>([]);
+  const loading = ref(false);
+  const loadingParts = ref(false);
+  const error = ref<string | null>(null);
 
-  actions: {
-    setSupplier(supplier: Supplier) {
-      this.supplier = supplier;
-    },
+  const supplierCount = computed(() => suppliers.value.length);
+  const partsCount = computed(() => parts.value.length);
 
-    setLocation(locationType: 'billTo' | 'shipFrom' | 'shipTo', location: Location) {
-      this.locations[locationType] = location;
-    },
-
-    setAddress(addressType: 'billTo' | 'shipFrom' | 'shipTo', address: AddressDTO) {
-      this.addresses[addressType] = address;
-    },
-
-    updatePurchaseOrderParts(parts: Part[]) {
-      this.purchaseOrderParts = parts.map(part => new PurchaseOrderPart({
-        purchase_order_id: this.purchaseOrder?.$attributes.id,
-        part_id: part.$attributes.id,
-        quantity_ordered: 0,
-        unit_cost: 0,
-        total_cost: 0,
-        quantity_invoiced: 0,
-        quantity_received: 0,
-        status: null,
-        notes: null,
-        part: part,
-      }));
-    },
-
-    updatePurchaseOrderPart(updatedPart: PurchaseOrderPart) {
-      const index = this.purchaseOrderParts.findIndex(p => p.$attributes.id === updatedPart.$attributes.id);
-      if (index !== -1) {
-        this.purchaseOrderParts[index] = updatedPart;
-      }
-    },
-
-    calculateTotals() {
-      this.purchaseOrderParts.forEach(part => {
-        part.$attributes.total_cost = part.$attributes.quantity_ordered * (part.$attributes.unit_cost || 0);
+  async function fetchSuppliers(params = {}) {
+    loading.value = true;
+    error.value = null;
+    try {
+      console.log('Fetching suppliers...');
+      const url = '/suppliers';
+      console.log('Full URL:', customHttpClient.getUri({ url }));
+      const response = await customHttpClient.get<OrionResponse<Supplier>>(url, {
+        params: {
+          ...params,
+          include: 'parts',
+          sort: '-created_at',
+        },
       });
-    },
-
-    async submitPurchaseOrder() {
-      this.loading = true;
-      this.error = null;
-      try {
-        if (!this.purchaseOrder) {
-          throw new Error('Purchase order is not initialized');
-        }
-
-        const orderData = {
-          ...this.purchaseOrder.$attributes,
-          supplier_id: this.supplier?.$attributes.id,
-          bill_to_location_id: this.locations.billTo?.$attributes.id,
-          ship_from_location_id: this.locations.shipFrom?.$attributes.id,
-          ship_to_location_id: this.locations.shipTo?.$attributes.id,
-          bill_to_address: this.addresses.billTo,
-          ship_from_address: this.addresses.shipFrom,
-          ship_to_address: this.addresses.shipTo,
-          total_cost: this.total,
-          status: 'submitted',
-          purchase_order_parts: this.purchaseOrderParts.map(part => part.$attributes),
-        };
-
-        const response = await api.post('/purchase-orders', orderData);
-        const newOrder = new PurchaseOrder(response.data);
-        this.purchaseOrder = newOrder;
-        return newOrder;
-      } catch (error: any) {
-        console.error('Error submitting purchase order:', error);
-        this.error = error.message || 'An error occurred while submitting the purchase order';
-        throw error;
-      } finally {
-        this.loading = false;
+      console.log('Full API response:', response);
+      if (response.data && Array.isArray(response.data.data)) {
+        suppliers.value = response.data.data.map((item: any) => new Supplier(item));
+        console.log('Parsed suppliers:', suppliers.value);
+      } else {
+        console.error('Unexpected API response structure:', response.data);
+        error.value = 'Unexpected API response structure';
       }
-    },
+      if (suppliers.value.length === 0) {
+        console.log('No suppliers found in the response');
+        error.value = 'No suppliers found';
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch suppliers:', err);
+      error.value = err.message || 'Failed to fetch suppliers';
+    } finally {
+      loading.value = false;
+    }
+  }
 
-    resetStore() {
-      this.purchaseOrder = null;
-      this.purchaseOrderParts = [];
-      this.supplier = null;
-      this.locations = {
-        billTo: null,
-        shipFrom: null,
-        shipTo: null,
-      };
-      this.addresses = {
-        billTo: null,
-        shipFrom: null,
-        shipTo: null,
-      };
-      this.loading = false;
-      this.error = null;
-    },
-  },
+  async function selectSupplier(supplierId: number) {
+    const supplier = suppliers.value.find(s => s.$attributes.id === supplierId);
+    if (supplier) {
+      selectedSupplier.value = supplier;
+      await fetchSupplierParts(supplierId);
+    } else {
+      error.value = `Selected supplier not found. ID: ${supplierId}. Available suppliers: ${suppliers.value.map(s => s.$attributes.id).join(', ')}`;
+    }
+  }
+
+  async function fetchSupplierParts(supplierId: number) {
+    loadingParts.value = true;
+    error.value = null;
+    try {
+      const response = await customHttpClient.get<OrionResponse<Part>>(`/suppliers/${supplierId}/parts`, {
+        params: {
+          include: 'bill_of_material',
+        },
+      });
+      parts.value = response.data.data.map((item: any) => new Part(item));
+    } catch (err: any) {
+      console.error('Failed to fetch supplier parts:', err);
+      error.value = err.message || 'Failed to fetch supplier parts';
+    } finally {
+      loadingParts.value = false;
+    }
+  }
+
+  function updatePartQuantity(partId: number, quantity: number) {
+    const part = parts.value.find(p => p.$attributes.id === partId);
+    if (part) {
+      part.$attributes.quantity = quantity;
+    }
+  }
+
+  function resetSelection() {
+    selectedSupplier.value = null;
+    parts.value = [];
+  }
+
+  async function createPurchaseOrder() {
+    // Implement the logic to create a purchase order
+    // This is a placeholder and should be implemented based on your backend API
+    console.log('Creating purchase order...');
+  }
+
+  return {
+    suppliers,
+    selectedSupplier,
+    parts,
+    loading,
+    loadingParts,
+    error,
+    supplierCount,
+    partsCount,
+    fetchSuppliers,
+    selectSupplier,
+    updatePartQuantity,
+    resetSelection,
+    createPurchaseOrder,
+  };
 });
